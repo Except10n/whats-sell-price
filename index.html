@@ -62,16 +62,43 @@
   .field label {
     flex-shrink: 0; width: 118px; font-size: 13px; color: var(--fg2);
   }
-  .field input, .result-row input {
+  .result-row input {
     flex: 1; min-width: 0; text-align: right;
     font-size: 16px; color: var(--fg);
     padding: 7px 10px; border: 1px solid var(--border); border-radius: 10px;
     background: transparent; font-variant-numeric: tabular-nums;
   }
-  .field input:focus, .result-row input:focus {
+  .result-row input:focus {
     outline: none; border-color: var(--accent);
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
   }
+  /* 字段区：输入框 + 右侧单位装饰段（对齐桌面版 InputAdornment 形态） */
+  .input-group {
+    flex: 1; min-width: 0;
+    display: flex; align-items: stretch;
+    border: 1px solid var(--border); border-radius: 10px;
+    background: transparent;
+  }
+  .input-group:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+  }
+  .input-group input {
+    flex: 1; min-width: 0; border: 0; outline: none;
+    text-align: right; font-size: 16px; color: var(--fg);
+    padding: 7px 10px; background: transparent; font-variant-numeric: tabular-nums;
+  }
+  .input-group .unit {
+    flex-shrink: 0; display: flex; align-items: center;
+    padding: 0 10px; font-size: 13px; color: var(--fg2);
+    background: color-mix(in srgb, var(--fg) 5%, transparent);
+    border-left: 1px solid var(--border);
+  }
+  /* 结果区金额：$ 前置紧贴数字 */
+  .amount { flex: 1; min-width: 0; display: inline-flex; align-items: center; justify-content: flex-end; gap: 1px; }
+  .amount input { flex: 0 1 110px; }
+  .amount .cur { font-size: 16px; font-weight: 600; color: var(--fg); }
+  .result-row--buyer .cur { color: var(--green); }
 
   .result-row { display: flex; align-items: center; gap: 10px; padding: 12px 0; }
   .result-row + .result-row { border-top: 1px solid var(--border); }
@@ -98,7 +125,27 @@
   .copy-btn:active { opacity: 0.8; }
   .copy-btn.done { background: var(--green); }
 
-  .hint { font-size: 11px; line-height: 1.7; color: var(--fg3); padding: 10px 2px 6px; }
+  .formulas {
+    display: none; flex-direction: column; gap: 8px;
+    margin-top: 12px;
+  }
+  .formulas.show { display: flex; }
+  .formula {
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--fg) 4%, transparent);
+  }
+  .formula .fl {
+    display: block; margin-bottom: 3px;
+    font-size: 11px; color: var(--fg3);
+  }
+  .formula code {
+    font-family: inherit;
+    font-size: 13px; color: var(--fg);
+    font-variant-numeric: tabular-nums;
+    word-break: break-all; line-height: 1.5;
+  }
 </style>
 </head>
 <body>
@@ -113,13 +160,11 @@
   <div class="rows" id="rows">
     <div class="result-row">
       <span class="rl">预计收入</span>
-      <input inputmode="decimal" data-key="income" placeholder="0.00" title="输入预计收入，反推成本价与买家价格" />
-      <span style="color:var(--fg2);font-weight:600">$</span>
+      <span class="amount"><span class="cur">$</span><input inputmode="decimal" data-key="income" placeholder="0.00" title="输入预计收入（含买家运费），反推成本价与买家价格" /></span>
     </div>
     <div class="result-row result-row--buyer">
       <span class="rl">买家价格（美元）</span>
-      <input inputmode="decimal" data-key="buyer" placeholder="0.00" title="输入买家价格，反推成本价" />
-      <span style="color:var(--green);font-weight:600">$</span>
+      <span class="amount"><span class="cur">$</span><input inputmode="decimal" data-key="buyer" placeholder="0.00" title="输入买家价格（含买家运费），反推成本价" /></span>
     </div>
     <div class="result-row">
       <span class="rl">买家价格（欧元+VAT）</span>
@@ -128,7 +173,20 @@
   </div>
   <p class="invalid" id="invalid">毛利率、佣金比例需小于 100%，汇率需大于 0，无法计算</p>
   <button class="copy-btn" id="copy" type="button">复制报价</button>
-  <p class="hint">人民币口径 = 成本价 ÷（1-毛利率）+ 快递费 + 国际运费；买家价($) = 人民币口径 ÷ 美元汇率 ÷（1-佣金比例）</p>
+  <div class="formulas" id="formulas">
+    <div class="formula">
+      <span class="fl">预计收入</span>
+      <code id="fc1"></code>
+    </div>
+    <div class="formula">
+      <span class="fl">买家价格（美元）</span>
+      <code id="fc2"></code>
+    </div>
+    <div class="formula">
+      <span class="fl">买家价格（欧元+VAT）</span>
+      <code id="fc3"></code>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -137,19 +195,20 @@
 
   var STORAGE_KEY = 'whats:price-inputs';
   var DEFAULTS = {
-    cost: 0, buyer: 0, buyerEur: 0, income: 0,
+    cost: 0, buyer: 0, buyerEur: 0, income: 0, buyerShipping: 0,
     margin: 0, express: 0, intl: 0, commission: 0,
     usdRate: 6.7, eurRate: 1.11, vat: 21
   };
   var FIELDS = [
-    { key: 'cost', label: '成本价（元）', title: '编辑买家价格或预计收入时自动反推' },
-    { key: 'margin', label: '毛利率（%）' },
-    { key: 'express', label: '快递费（元）' },
-    { key: 'intl', label: '国际运费（元）' },
-    { key: 'commission', label: '佣金比例（%）' },
-    { key: 'usdRate', label: '美元汇率（元）', title: '1 美元 = ? 人民币，预计收入 = 人民币口径 ÷ 美元汇率' },
-    { key: 'eurRate', label: '欧元汇率（$）', title: '1 欧元 = ? 美元，最终买家价(€) = 买家价($) ÷ 欧元汇率 ×（1+欧盟税率）' },
-    { key: 'vat', label: '欧盟税率（%）', title: '在买家价格之上额外征收，按目的地国家 17%~27%，如德国 19%、法国 20%' }
+    { key: 'margin', label: '毛利率', unit: '%' },
+    { key: 'cost', label: '成本货价', unit: '¥', title: '编辑买家价格或预计收入时自动反推' },
+    { key: 'express', label: '成本快递', unit: '¥' },
+    { key: 'intl', label: '成本物流', unit: '¥' },
+    { key: 'buyerShipping', label: '买家运费', unit: '$', title: '买家额外支付的运费，计入买家价格、预计收入与 VAT 计税基数' },
+    { key: 'commission', label: '佣金比例', unit: '%' },
+    { key: 'usdRate', label: '美元汇率', unit: '¥', title: '1 美元 = ? 人民币，预计收入 = 人民币口径 ÷ 美元汇率 + 买家运费' },
+    { key: 'eurRate', label: '欧元汇率', unit: '$', title: '1 欧元 = ? 美元，最终买家价(€) = 买家价($) ÷ 欧元汇率 ×（1+欧盟税率）' },
+    { key: 'vat', label: '欧盟税率', unit: '%', title: '在买家价格之上额外征收，按目的地国家 17%~27%，如德国 19%、法国 20%' }
   ];
 
   var LEGACY_USD_RATE = 6.7; // 历史版本的固定美元汇率（迁移旧存储换算用）
@@ -175,7 +234,8 @@
     } catch (e) { return JSON.parse(JSON.stringify(DEFAULTS)); }
   }
 
-  // 与桌面版一致：归一到人民币口径 R = 成本÷(1-毛利率)+快递费+国际运费，再分摊各端
+  // 与桌面版一致：归一到货物人民币口径 R = 成本÷(1-毛利率)+快递费+国际运费，再分摊各端；
+  // 预计收入 = 货物收入 + 买家运费；买家价 = 货物收入÷(1-佣金) + 买家运费（运费不加佣金加成）；VAT 基数含买家运费
   function recompute(next, anchor) {
     var md = 1 - next.margin / 100;
     var cd = 1 - next.commission / 100;
@@ -183,12 +243,12 @@
     var vat = 1 + next.vat / 100;
     var r;
     if (anchor === 'cost') r = next.cost / md + next.express + next.intl;
-    else if (anchor === 'buyer') r = next.buyer * cd * next.usdRate;
-    else r = next.income * next.usdRate;
+    else if (anchor === 'buyer') r = (next.buyer - next.buyerShipping) * cd * next.usdRate;
+    else r = (next.income - next.buyerShipping) * next.usdRate;
     if (!isFinite(r)) return false;
     if (anchor !== 'cost') next.cost = (r - next.express - next.intl) * md;
-    if (anchor !== 'income') next.income = r / next.usdRate;
-    if (anchor !== 'buyer') next.buyer = next.income / cd;
+    if (anchor !== 'income') next.income = r / next.usdRate + next.buyerShipping;
+    if (anchor !== 'buyer') next.buyer = r / next.usdRate / cd + next.buyerShipping;
     next.buyerEur = (next.buyer / next.eurRate) * vat;
     return true;
   }
@@ -207,6 +267,9 @@
   var values = loadValues();
   var inputs = []; // { el, key }
 
+  // 公式代入用的数值文本：去掉多余小数尾零（6.70→6.7、100.00→100）
+  function trimNum(n) { return String(parseFloat(n.toFixed(2))); }
+
   function render() {
     var invalid =
       1 - values.margin / 100 <= 0 ||
@@ -216,6 +279,16 @@
     document.getElementById('rows').classList.toggle('hidden', invalid);
     document.getElementById('invalid').classList.toggle('show', invalid);
     document.getElementById('eur').textContent = '€' + values.buyerEur.toFixed(2);
+    var formulas = document.getElementById('formulas');
+    formulas.classList.toggle('show', !invalid);
+    if (!invalid) {
+      document.getElementById('fc1').textContent =
+        '(' + trimNum(values.cost) + '÷(1−' + trimNum(values.margin) + '%)+' + trimNum(values.express) + '+' + trimNum(values.intl) + ')÷' + trimNum(values.usdRate) + '+' + trimNum(values.buyerShipping) + ' = ' + values.income.toFixed(2);
+      document.getElementById('fc2').textContent =
+        '(' + values.income.toFixed(2) + '−' + trimNum(values.buyerShipping) + ')÷(1−' + trimNum(values.commission) + '%)+' + trimNum(values.buyerShipping) + ' = ' + values.buyer.toFixed(2);
+      document.getElementById('fc3').textContent =
+        values.buyer.toFixed(2) + '÷' + trimNum(values.eurRate) + '×(1+' + trimNum(values.vat) + '%) = ' + values.buyerEur.toFixed(2);
+    }
     for (var i = 0; i < inputs.length; i++) {
       var it = inputs[i];
       if (document.activeElement === it.el) continue; // 焦点中不回写，避免打断输入
@@ -232,6 +305,10 @@
 
   function bind(el, key) {
     inputs.push({ el: el, key: key });
+    var original = ''; // 聚焦时的原始文本
+    el.addEventListener('focus', function () {
+      original = el.value;
+    });
     el.addEventListener('input', function () {
       var cleaned = cleanText(el.value);
       if (cleaned !== el.value) el.value = cleaned;
@@ -239,6 +316,8 @@
       if (isFinite(parsed)) commit(key, parsed);
     });
     el.addEventListener('blur', function () {
+      // 未修改时不触发换算：避免 focus+blur 用舍入后的展示值反推造成其他字段抖动
+      if (el.value === original) return;
       var v = parseFloat(el.value);
       if (!isFinite(v)) v = 0;
       commit(key, v);
@@ -246,7 +325,7 @@
     });
   }
 
-  // 生成字段区
+  // 生成字段区：输入框 + 右侧单位装饰段
   var box = document.getElementById('fields');
   FIELDS.forEach(function (f) {
     var row = document.createElement('div');
@@ -254,11 +333,18 @@
     if (f.title) row.title = f.title;
     var label = document.createElement('label');
     label.textContent = f.label;
+    var group = document.createElement('div');
+    group.className = 'input-group';
     var input = document.createElement('input');
     input.inputMode = 'decimal';
     input.placeholder = '0.00';
+    var unit = document.createElement('span');
+    unit.className = 'unit';
+    unit.textContent = f.unit || '';
+    group.appendChild(input);
+    group.appendChild(unit);
     row.appendChild(label);
-    row.appendChild(input);
+    row.appendChild(group);
     box.appendChild(row);
     bind(input, f.key);
   });
