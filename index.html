@@ -1,410 +1,821 @@
 <!doctype html>
 <html lang="zh-CN">
+
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<meta name="apple-mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-status-bar-style" content="default" />
-<meta name="apple-mobile-web-app-title" content="价格计算" />
-<meta name="theme-color" media="(prefers-color-scheme: light)" content="#f2f3f5" />
-<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#111317" />
-<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' rx='40' fill='%230052d9'/%3E%3Ctext x='90' y='118' font-size='84' text-anchor='middle' fill='%23fff' font-family='system-ui'%3E%F0%9F%92%B0%3C/text%3E%3C/svg%3E" />
-<title>价格计算器</title>
-<style>
-  *, *::before, *::after { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  :root {
-    --bg: #f2f3f5;
-    --card: #ffffff;
-    --border: #e4e7ec;
-    --fg: #1c1f23;
-    --fg2: #6b7280;
-    --fg3: #9ca3af;
-    --accent: #0052d9;
-    --green: #2ba471;
-    --red: #d54941;
-  }
-  @media (prefers-color-scheme: dark) {
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="价格计算" />
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f2f3f5" />
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#111317" />
+  <link rel="apple-touch-icon"
+    href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' rx='40' fill='%230052d9'/%3E%3Ctext x='90' y='118' font-size='84' text-anchor='middle' fill='%23fff' font-family='system-ui'%3E%F0%9F%92%B0%3C/text%3E%3C/svg%3E" />
+  <title>价格计算器</title>
+  <style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
     :root {
-      --bg: #111317;
-      --card: #1d1f23;
-      --border: #2c2f36;
-      --fg: #e8eaed;
-      --fg2: #9aa1ac;
-      --fg3: #6b7280;
-      --accent: #4c8dff;
-      --green: #3ec98f;
-      --red: #f0685f;
+      --bg: #f2f3f5;
+      --card: #ffffff;
+      --border: #e4e7ec;
+      --fg: #1c1f23;
+      --fg2: #6b7280;
+      --fg3: #9ca3af;
+      --accent: #0052d9;
+      --green: #2ba471;
+      --red: #d54941;
+      --orange: #d9730d;
     }
-  }
-  html { -webkit-text-size-adjust: 100%; }
-  body {
-    margin: 0;
-    padding: 16px 14px calc(20px + env(safe-area-inset-bottom));
-    font-family: -apple-system, "PingFang SC", system-ui, sans-serif;
-    background: var(--bg);
-    color: var(--fg);
-    min-height: 100vh;
-  }
-  header { display: flex; align-items: baseline; gap: 8px; padding: 4px 2px 14px; }
-  h1 { margin: 0; font-size: 22px; font-weight: 700; }
-  header small { color: var(--fg3); font-size: 12px; }
 
-  .card {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 6px 14px;
-    margin-bottom: 14px;
-  }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #111317;
+        --card: #1d1f23;
+        --border: #2c2f36;
+        --fg: #e8eaed;
+        --fg2: #9aa1ac;
+        --fg3: #6b7280;
+        --accent: #4c8dff;
+        --green: #3ec98f;
+        --red: #f0685f;
+        --orange: #f5a623;
+      }
+    }
 
-  .field { display: flex; align-items: center; gap: 10px; padding: 9px 0; }
-  .field + .field { border-top: 1px solid var(--border); }
-  .field label {
-    flex-shrink: 0; width: 118px; font-size: 13px; color: var(--fg2);
-  }
-  .result-row input {
-    flex: 1; min-width: 0; text-align: right;
-    font-size: 16px; color: var(--fg);
-    padding: 7px 10px; border: 1px solid var(--border); border-radius: 10px;
-    background: transparent; font-variant-numeric: tabular-nums;
-  }
-  .result-row input:focus {
-    outline: none; border-color: var(--accent);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
-  }
-  /* 字段区：输入框 + 右侧单位装饰段（对齐桌面版 InputAdornment 形态） */
-  .input-group {
-    flex: 1; min-width: 0;
-    display: flex; align-items: stretch;
-    border: 1px solid var(--border); border-radius: 10px;
-    background: transparent;
-  }
-  .input-group:focus-within {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
-  }
-  .input-group input {
-    flex: 1; min-width: 0; border: 0; outline: none;
-    text-align: right; font-size: 16px; color: var(--fg);
-    padding: 7px 10px; background: transparent; font-variant-numeric: tabular-nums;
-  }
-  .input-group .unit {
-    flex-shrink: 0; display: flex; align-items: center;
-    padding: 0 10px; font-size: 13px; color: var(--fg2);
-    background: color-mix(in srgb, var(--fg) 5%, transparent);
-    border-left: 1px solid var(--border);
-  }
-  /* 结果区金额：$ 前置紧贴数字 */
-  .amount { flex: 1; min-width: 0; display: inline-flex; align-items: center; justify-content: flex-end; gap: 1px; }
-  .amount input { flex: 0 1 110px; }
-  .amount .cur { font-size: 16px; font-weight: 600; color: var(--fg); }
-  .result-row--buyer .cur { color: var(--green); }
+    html {
+      -webkit-text-size-adjust: 100%;
+    }
 
-  .result-row { display: flex; align-items: center; gap: 10px; padding: 12px 0; }
-  .result-row + .result-row { border-top: 1px solid var(--border); }
-  .result-row .rl { flex-shrink: 0; width: 118px; font-size: 13px; color: var(--fg2); }
-  .result-row input { font-weight: 600; }
-  .result-row .eur {
-    flex: 1; text-align: right; font-size: 24px; font-weight: 700;
-    color: var(--green); font-variant-numeric: tabular-nums;
-  }
-  .result-row--buyer input { color: var(--green); }
+    body {
+      margin: 0;
+      padding: 16px 14px calc(20px + env(safe-area-inset-bottom));
+      font-family: -apple-system, "PingFang SC", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      min-height: 100vh;
+    }
 
-  .invalid {
-    display: none; padding: 14px 0; font-size: 13px; line-height: 1.6; color: var(--red);
-  }
-  .invalid.show { display: block; }
-  .rows.hidden { display: none; }
+    header {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      padding: 4px 2px 14px;
+    }
 
-  .copy-btn {
-    display: block; width: 100%; margin: 4px 0 2px;
-    padding: 12px; border: 0; border-radius: 12px;
-    background: var(--accent); color: #fff;
-    font-size: 15px; font-weight: 600; cursor: pointer;
-  }
-  .copy-btn:active { opacity: 0.8; }
-  .copy-btn.done { background: var(--green); }
+    h1 {
+      margin: 0;
+      font-size: 22px;
+      font-weight: 700;
+    }
 
-  .formulas {
-    display: none; flex-direction: column; gap: 8px;
-    margin-top: 12px;
-  }
-  .formulas.show { display: flex; }
-  .formula {
-    padding: 8px 12px;
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    background: color-mix(in srgb, var(--fg) 4%, transparent);
-  }
-  .formula .fl {
-    display: block; margin-bottom: 3px;
-    font-size: 11px; color: var(--fg3);
-  }
-  .formula code {
-    font-family: inherit;
-    font-size: 13px; color: var(--fg);
-    font-variant-numeric: tabular-nums;
-    word-break: break-all; line-height: 1.5;
-  }
-</style>
+    header small {
+      color: var(--fg3);
+      font-size: 12px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 6px 14px;
+      margin-bottom: 14px;
+    }
+
+    .field {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 0;
+    }
+
+    .field+.field {
+      border-top: 1px solid var(--border);
+    }
+
+    .field label {
+      /* inline-flex 让问号图标与文字垂直居中 */
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      flex-shrink: 0;
+      width: 118px;
+      font-size: 13px;
+      color: var(--fg2);
+    }
+
+    .result-row input {
+      flex: 1;
+      min-width: 0;
+      text-align: right;
+      font-size: 16px;
+      color: var(--fg);
+      padding: 7px 10px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: transparent;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .result-row input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+    }
+
+    /* 字段区：输入框 + 右侧单位装饰段（对齐桌面版 InputAdornment 形态） */
+    .input-group {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      align-items: stretch;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: transparent;
+    }
+
+    .input-group:focus-within {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+    }
+
+    .input-group input {
+      flex: 1;
+      min-width: 0;
+      border: 0;
+      outline: none;
+      text-align: right;
+      font-size: 16px;
+      color: var(--fg);
+      padding: 7px 10px;
+      background: transparent;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .input-group .unit {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      padding: 0 10px;
+      font-size: 13px;
+      color: var(--fg2);
+      background: color-mix(in srgb, var(--fg) 5%, transparent);
+      border-left: 1px solid var(--border);
+    }
+
+    /* 结果区金额：$ 前置紧贴数字 */
+    .amount {
+      flex: 1;
+      min-width: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 1px;
+    }
+
+    .amount input {
+      flex: 0 1 110px;
+    }
+
+    .amount .cur {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--fg);
+    }
+
+    .result-row--buyer .cur {
+      color: var(--green);
+    }
+
+    .result-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 0;
+    }
+
+    .result-row+.result-row {
+      border-top: 1px solid var(--border);
+    }
+
+    .result-row .rl {
+      /* inline-flex 让问号图标与文字垂直居中 */
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      flex-shrink: 0;
+      width: 118px;
+      font-size: 13px;
+      color: var(--fg2);
+    }
+
+    .result-row input {
+      font-weight: 600;
+    }
+
+    .result-row .eur {
+      flex: 1;
+      text-align: right;
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--green);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .result-row--buyer input {
+      color: var(--green);
+    }
+
+    .invalid {
+      display: none;
+      padding: 14px 0;
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--red);
+    }
+
+    .invalid.show {
+      display: block;
+    }
+
+    .rows.hidden {
+      display: none;
+    }
+
+    .copy-btn {
+      display: block;
+      width: 100%;
+      margin: 4px 0 2px;
+      padding: 12px;
+      border: 0;
+      border-radius: 12px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .copy-btn:active {
+      opacity: 0.8;
+    }
+
+    .copy-btn.done {
+      background: var(--green);
+    }
+
+    .formulas {
+      display: none;
+      flex-direction: column;
+      margin-top: 12px;
+    }
+
+    .formulas.show {
+      display: flex;
+    }
+
+    /* 结算单（原公式区）：DHgate 订单结算样式逐行列出各项金额 */
+    .formulas .bd {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 8px 0;
+    }
+
+    .formulas .bd+.bd {
+      border-top: 1px solid color-mix(in srgb, var(--fg) 7%, transparent);
+    }
+
+    .formulas .bl {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 13px;
+      color: var(--fg2);
+    }
+
+    .formulas .bv {
+      font-size: 14px;
+      font-variant-numeric: tabular-nums;
+      color: var(--fg);
+    }
+
+    .formulas .bd--total {
+      margin-top: 2px;
+      padding-top: 10px;
+      border-top: 1px dashed var(--border);
+    }
+
+    .formulas .bd--total .bv {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--orange);
+    }
+
+    /* 项目名后的圆圈问号：点击弹出该项目的公式（数值代入算式） */
+    .help {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      flex-shrink: 0;
+      color: var(--fg3);
+      cursor: pointer;
+    }
+
+    .help svg {
+      display: block;
+      /* 消除 inline svg 的 baseline 间隙，保证垂直居中 */
+      width: 13px;
+      height: 13px;
+    }
+
+    .help.open,
+    .help:active {
+      color: var(--accent);
+    }
+
+    .help-pop {
+      display: none;
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      z-index: 40;
+      width: max-content;
+      max-width: 230px;
+      padding: 8px 10px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 6px 18px color-mix(in srgb, #000 16%, transparent);
+      font-size: 12px;
+      font-weight: 400;
+      line-height: 1.6;
+      color: var(--fg);
+      font-variant-numeric: tabular-nums;
+      word-break: break-all;
+      white-space: normal;
+      text-align: left;
+    }
+
+    .help.open .help-pop {
+      display: block;
+    }
+  </style>
 </head>
+
 <body>
-<header>
-  <h1>价格计算器</h1>
-  <small>成本 → 收入 → 买家价</small>
-</header>
+  <header>
+    <h1>价格计算器</h1>
+    <small>成本 → 收入 → 买家价</small>
+  </header>
 
-<div class="card" id="fields"></div>
+  <div class="card" id="fields"></div>
 
-<div class="card">
-  <div class="rows" id="rows">
-    <div class="result-row">
-      <span class="rl">预计收入</span>
-      <span class="amount"><span class="cur">$</span><input inputmode="decimal" data-key="income" placeholder="0.00" title="输入预计收入（含买家运费），反推成本价与买家价格" /></span>
+  <div class="card">
+    <div class="rows" id="rows">
+      <div class="result-row">
+        <span class="rl">产品定价</span>
+        <span class="amount"><span class="cur">$</span><input inputmode="decimal" data-key="income"
+            placeholder="0.00" /></span>
+      </div>
+      <div class="result-row result-row--buyer">
+        <span class="rl">买家价格（美元）</span>
+        <span class="amount"><span class="cur">$</span><input inputmode="decimal" data-key="buyer"
+            placeholder="0.00" /></span>
+      </div>
+      <div class="result-row">
+        <span class="rl">买家价格（欧元+VAT）</span>
+        <span class="eur" id="eur">€0.00</span>
+      </div>
     </div>
-    <div class="result-row result-row--buyer">
-      <span class="rl">买家价格（美元）</span>
-      <span class="amount"><span class="cur">$</span><input inputmode="decimal" data-key="buyer" placeholder="0.00" title="输入买家价格（含买家运费），反推成本价" /></span>
-    </div>
-    <div class="result-row">
-      <span class="rl">买家价格（欧元+VAT）</span>
-      <span class="eur" id="eur" title="买家价格换算欧元后额外加收欧盟税">€0.00</span>
+    <p class="invalid" id="invalid">毛利率需小于 100%，佣金+交易手续费合计需小于 100%，汇率需大于 0，无法计算</p>
+    <button class="copy-btn" id="copy" type="button">复制报价</button>
+    <div class="formulas" id="formulas">
+      <div class="bd">
+        <span class="bl">产品总计</span>
+        <span class="bv" id="bd-product">$0.00</span>
+      </div>
+      <div class="bd">
+        <span class="bl">运费</span>
+        <span class="bv" id="bd-ship">$0.00</span>
+      </div>
+      <div class="bd">
+        <span class="bl">订单总额</span>
+        <span class="bv" id="bd-total">$0.00</span>
+      </div>
+      <div class="bd">
+        <span class="bl">佣金金额</span>
+        <span class="bv bv--minus" id="bd-comm">−$0.00</span>
+      </div>
+      <div class="bd">
+        <span class="bl">实付金额</span>
+        <span class="bv" id="bd-paid">$0.00</span>
+      </div>
+      <div class="bd">
+        <span class="bl">支付手续费</span>
+        <span class="bv bv--minus" id="bd-fee">−$0.00</span>
+      </div>
+      <div class="bd bd--total">
+        <span class="bl">实收金额</span>
+        <span class="bv bv--strong" id="bd-actual">$0.00</span>
+      </div>
     </div>
   </div>
-  <p class="invalid" id="invalid">毛利率、佣金比例需小于 100%，汇率需大于 0，无法计算</p>
-  <button class="copy-btn" id="copy" type="button">复制报价</button>
-  <div class="formulas" id="formulas">
-    <div class="formula">
-      <span class="fl">预计收入</span>
-      <code id="fc1"></code>
-    </div>
-    <div class="formula">
-      <span class="fl">买家价格（美元）</span>
-      <code id="fc2"></code>
-    </div>
-    <div class="formula">
-      <span class="fl">买家价格（欧元+VAT）</span>
-      <code id="fc3"></code>
-    </div>
-  </div>
-</div>
 
-<script>
-(function () {
-  'use strict';
+  <script>
+    (function () {
+      'use strict';
 
-  var STORAGE_KEY = 'whats:price-inputs';
-  var DEFAULTS = {
-    cost: 0, buyer: 0, buyerEur: 0, income: 0, buyerShipping: 0,
-    margin: 0, express: 0, intl: 0, commission: 0,
-    usdRate: 6.7, eurRate: 1.11, vat: 21
-  };
-  var FIELDS = [
-    { key: 'margin', label: '毛利率', unit: '%' },
-    { key: 'cost', label: '成本货价', unit: '¥', title: '编辑买家价格或预计收入时自动反推' },
-    { key: 'express', label: '成本快递', unit: '¥' },
-    { key: 'intl', label: '成本物流', unit: '¥' },
-    { key: 'buyerShipping', label: '买家运费', unit: '$', title: '买家额外支付的运费，计入买家价格、预计收入与 VAT 计税基数' },
-    { key: 'commission', label: '佣金比例', unit: '%' },
-    { key: 'usdRate', label: '美元汇率', unit: '¥', title: '1 美元 = ? 人民币，预计收入 = 人民币口径 ÷ 美元汇率 + 买家运费' },
-    { key: 'eurRate', label: '欧元汇率', unit: '$', title: '1 欧元 = ? 美元，最终买家价(€) = 买家价($) ÷ 欧元汇率 ×（1+欧盟税率）' },
-    { key: 'vat', label: '欧盟税率', unit: '%', title: '在买家价格之上额外征收，按目的地国家 17%~27%，如德国 19%、法国 20%' }
-  ];
+      var STORAGE_KEY = 'whats:price-inputs';
+      var SEM_KEY = 'whats:price-sem'; // 口径版本标记（旧数据一次性迁移用）：3 = 手续费改按买家价格扣；4 = 运费短暂改实付口径；5 = 运费改回净得口径
+      var DEFAULTS = {
+        cost: 0, buyer: 0, buyerEur: 0, actualIncome: 0, income: 0, fee: 3.5,
+        buyerShipping: 0, margin: 0, markup: 0, intl: 0, commission: 0,
+        usdRate: 6.7, eurRate: 1.11, vat: 21
+      };
+      var FIELDS = [
+        { key: 'margin', label: '毛利率', unit: '%' },
+        { key: 'markup', label: '加价率', unit: '%' },
+        { key: 'cost', label: '成本货价', unit: '¥' },
+        { key: 'intl', label: '成本物流', unit: '¥' },
+        { key: 'buyerShipping', label: '买家运费', unit: '$' },
+        { key: 'commission', label: '佣金比例', unit: '%' },
+        { key: 'fee', label: '交易手续费', unit: '%' },
+        { key: 'usdRate', label: '美元汇率', unit: '¥' },
+        { key: 'eurRate', label: '欧元汇率', unit: '$' },
+        { key: 'vat', label: '欧盟税率', unit: '%' }
+      ];
 
-  var LEGACY_USD_RATE = 6.7; // 历史版本的固定美元汇率（迁移旧存储换算用）
+      var LEGACY_USD_RATE = 6.7; // 历史版本的固定美元汇率（迁移旧存储换算用）
 
-  function loadValues() {
-    try {
-      var saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-      var v = {};
-      for (var k in DEFAULTS) v[k] = DEFAULTS[k];
-      for (var k2 in DEFAULTS) {
-        if (typeof saved[k2] === 'number' && isFinite(saved[k2])) v[k2] = saved[k2];
+      // 报价文案模板（复制按钮输出）：每行一条，整行换行拼接。
+      // 占位符：{buyer}=买家价格($)  {shipping}=实付运费($，=买家运费÷(1−佣金) 向上取整)  {vat}=欧盟税率(%)  {eur}=含税欧元价
+      // 买家运费为 0 时，含 {shipping} 的行自动整行跳过。措辞可自行调整，保留占位符即可。
+      var QUOTE_TEMPLATE = [
+        'The price of this item after discount (shipping included) is ${buyer} USD.',
+        'The shipping fee is ${shipping} USD.',
+        'Estimated price for EU countries ({vat}% VAT included): €{eur} EUR.',
+        'This is an estimated price.'
+      ];
+
+      function renderQuote() {
+        var shippingPaid = ceil2(values.buyerShipping / (1 - values.commission / 100));
+        var slots = {
+          buyer: values.buyer.toFixed(2),
+          shipping: shippingPaid.toFixed(2),
+          vat: String(Math.round(values.vat)),
+          eur: values.buyerEur.toFixed(2)
+        };
+        return QUOTE_TEMPLATE
+          .filter(function (line) { return values.buyerShipping > 0 || line.indexOf('{shipping}') < 0; })
+          .map(function (line) {
+            return line.replace(/\{(buyer|shipping|vat|eur)\}/g, function (_, key) { return slots[key]; });
+          })
+          .join('\n');
       }
-      if (saved.vat === 20) v.vat = 21; // 旧默认税 20 升级；用户自定义值不受影响
-      // 上一版欧元汇率锚定人民币（1€=?¥，存储里尚无 usdRate 字段）：÷6.7 换算回美元口径（与桌面版一致）
-      if (typeof saved.usdRate !== 'number' && typeof saved.eurRate === 'number' && isFinite(saved.eurRate) && saved.eurRate > 0) {
-        v.eurRate = Math.round((saved.eurRate / LEGACY_USD_RATE) * 100) / 100;
+
+      function loadValues() {
+        try {
+          var saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+          var v = {};
+          for (var k in DEFAULTS) v[k] = DEFAULTS[k];
+          for (var k2 in DEFAULTS) {
+            if (typeof saved[k2] === 'number' && isFinite(saved[k2])) v[k2] = saved[k2];
+          }
+          // 2026-09-28 起成本快递与成本物流合并为「成本物流」：旧存储两值相加一次性并入（存盘后 express 字段消失，天然幂等）
+          if (typeof saved.express === 'number' && isFinite(saved.express)) v.intl += saved.express;
+          if (saved.vat === 20) v.vat = 21; // 旧默认税 20 升级；用户自定义值不受影响
+          // 上一版欧元汇率锚定人民币（1€=?¥，存储里尚无 usdRate 字段）：÷6.7 换算回美元口径（与桌面版一致）
+          if (typeof saved.usdRate !== 'number' && typeof saved.eurRate === 'number' && isFinite(saved.eurRate) && saved.eurRate > 0) {
+            v.eurRate = Math.round((saved.eurRate / LEGACY_USD_RATE) * 100) / 100;
+          }
+          // 更早版本字段名 eurUsd（1€=?$），语义相同，直接沿用
+          if (typeof saved.eurUsd === 'number' && isFinite(saved.eurUsd) && saved.eurUsd > 0) {
+            v.eurRate = saved.eurUsd;
+          }
+          // 2026-09-28 口径 v3（新增交易手续费）→ v4（手续费改按买家价格扣，商品+运费、不含欧盟税）：
+          // v3 迁移只反推毛利率；v4 变化仅影响买家价格/产品定价的放大方式，载入后的正向 recompute 自动重算，
+          // 毛利率与实际收入不受影响，无需额外迁移
+          // 旧数据一次性迁移——保留真实的产品定价/买家价（对外报价不变），按新口径反推毛利率；
+          // 迁移后打标记 v3，避免每次载入重复执行
+          if (localStorage.getItem(SEM_KEY) !== '3') {
+            var fd0 = 1 - v.fee / 100;
+            if (fd0 > 0) {
+              var rev0 = v.income * fd0 * v.usdRate - v.intl; // 实际收入扣转嫁（intl 已并入旧快递费）
+              if (isFinite(rev0) && rev0 > 0) v.margin = (1 - v.cost / rev0) * 100;
+            }
+            try { localStorage.setItem(SEM_KEY, '3'); } catch (e) { }
+          }
+          // 2026-09-29 买家运费改实付口径（平台订单「运费」行原值，不再 ÷(1−佣金) 放大）：
+          // 旧存储的净得值 ÷(1−佣金) 一次性换算回实付值（按当前佣金比例，幂等：标记写入后不再执行）
+          if (localStorage.getItem(SEM_KEY) !== '4') {
+            var cd0 = 1 - v.commission / 100;
+            if (v.buyerShipping > 0 && cd0 > 0) v.buyerShipping = round2(v.buyerShipping / cd0);
+            // 迁移值立即落盘（否则下次载入按新口径误读旧净得值）；先写标记再写数据，任一失败回滚标记——
+            // ÷(1−佣金) 不幂等，下次必须能从旧值重新换算，不可对已换算值重跑
+            try {
+              localStorage.setItem(SEM_KEY, '4');
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(v));
+            } catch (e2) {
+              try { localStorage.removeItem(SEM_KEY); } catch (e3) { }
+            }
+          }
+          // 2026-09-29 当日再改回净得口径（实付 = 净得÷(1−佣金) 向上取整）：把 "4" 迁移出的实付值 ×(1−佣金) 换算回来
+          if (localStorage.getItem(SEM_KEY) !== '5') {
+            var cd1 = 1 - v.commission / 100;
+            if (v.buyerShipping > 0 && cd1 > 0) v.buyerShipping = round2(v.buyerShipping * cd1);
+            try {
+              localStorage.setItem(SEM_KEY, '5');
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(v));
+            } catch (e4) {
+              try { localStorage.removeItem(SEM_KEY); } catch (e5) { }
+            }
+          }
+          // 载入即按新口径重算一遍，保证展示状态自洽（加价率等派生值随之刷新）
+          recompute(v, 'cost');
+          return v;
+        } catch (e) { return JSON.parse(JSON.stringify(DEFAULTS)); }
       }
-      // 更早版本字段名 eurUsd（1€=?$），语义相同，直接沿用
-      if (typeof saved.eurUsd === 'number' && isFinite(saved.eurUsd) && saved.eurUsd > 0) {
-        v.eurRate = saved.eurUsd;
+
+      // 与桌面版一致（买家价扣费口径，2026-09-28 v4 定稿：交易手续费按买家价格（商品+运费，不含欧盟税）扣除）：
+      //   买家价格($) = 商品价格 + 运费（不含欧盟税）；买家价(€) = 买家价($) ÷ 欧元汇率 ×（1+欧盟税率），税不参与扣费；
+      //   产品定价($) = 买家价格×(1−佣金) —— 扣佣金后、未扣手续费（平台展示收入）；
+      //   实际收入($) = 买家价格×(1−佣金−手续费) —— 最终到手（佣金与手续费都按买家价格抽）。
+      // 毛利率 = 总利润 ÷（实际收入×美元汇率 − 成本物流），买家运费视同货款收入；
+      // 加价率 = 总利润 ÷ 成本货价，与毛利率纯比例互推（加价率 = 毛利率÷(1−毛利率)），
+      // 故正向编辑（成本、物流、佣金、手续费、汇率、税率）只动买家价格、两率纹丝不动；
+      // 成本物流（国内快递+国际运费合并）为纯转嫁项，手续费只放大买家价格，都不影响实际收入、利润与两率。
+      // 反向（编辑产品定价/买家价）：先归一到买家价格，成本货价不动，反推毛利率。逐键提交时数字可能还没输完：
+      // 反推结果非法（收入不够覆盖转嫁导致 margin ≥ 100%）则整次放弃、保持上一状态，等输入继续。
+      // 买家运费不参与定价与利润，仅用于报价文案与结算单拆分（买家实付运费 = 买家运费÷(1−佣金)，向上取整到分）。
+      function recompute(next, anchor) {
+        var md = 1 - next.margin / 100;
+        var netd = 1 - next.commission / 100 - next.fee / 100; // 买家价扣佣金+手续费后的净得比例
+        if (md <= 0 || netd <= 0 || next.usdRate <= 0 || next.eurRate <= 0) return false;
+        var vat = 1 + next.vat / 100;
+
+        if (anchor === 'buyer' || anchor === 'income') {
+          // 编辑买家价格/产品定价：先归一到买家价格（定价放大按平台口径向上取整到分），扣佣金+手续费得实际收入，成本货价不动、反推毛利率
+          var buyer = anchor === 'buyer' ? next.buyer : ceil2(next.income / (1 - next.commission / 100));
+          var rev = buyer * netd * next.usdRate - next.intl; // 实际收入扣转嫁 = 成本货价 + 总利润
+          var margin = (1 - next.cost / rev) * 100;
+          // 先算后写：数字未输完/收入过低（margin ≥ 100% 或非有限）时放弃本次反推，界面保持上一有效状态
+          if (!isFinite(rev) || rev === 0 || !isFinite(margin) || margin >= 100) return false;
+          next.margin = margin;
+          next.buyer = buyer;
+          // 定价锚时保持输入原值（115 → 买家 153.34 是放大后的对应关系，回乘会变 115.005 覆盖输入）
+          next.income = anchor === 'income' ? next.income : buyer * (1 - next.commission / 100);
+          next.actualIncome = buyer * netd;
+        } else {
+          // 正向：按毛利率定实际收入需求（实收覆盖成本+利润+转嫁），再按净得比例放大成买家价格（向上取整到分）
+          next.actualIncome = (next.cost / md + next.intl) / next.usdRate;
+          next.buyer = ceil2(next.actualIncome / netd);
+          next.income = next.buyer * (1 - next.commission / 100);
+        }
+        next.buyerEur = (next.buyer / next.eurRate) * vat;
+        // 联动派生：加价率 = 总利润÷成本货价（按实际收入算；代数上恒等于 毛利率÷(1−毛利率)；货价为 0 时无意义置 0）
+        var profit = next.actualIncome * next.usdRate - next.intl - next.cost;
+        next.markup = next.cost !== 0 ? (profit / next.cost) * 100 : 0;
+        return true;
       }
-      return v;
-    } catch (e) { return JSON.parse(JSON.stringify(DEFAULTS)); }
-  }
 
-  // 与桌面版一致：归一到货物人民币口径 R = 成本÷(1-毛利率)+快递费+国际运费，再分摊各端；
-  // 预计收入 = 货物收入 + 买家运费；买家价 = 货物收入÷(1-佣金) + 买家运费（运费不加佣金加成）；VAT 基数含买家运费
-  function recompute(next, anchor) {
-    var md = 1 - next.margin / 100;
-    var cd = 1 - next.commission / 100;
-    if (md <= 0 || cd <= 0 || next.usdRate <= 0 || next.eurRate <= 0) return false;
-    var vat = 1 + next.vat / 100;
-    var r;
-    if (anchor === 'cost') r = next.cost / md + next.express + next.intl;
-    else if (anchor === 'buyer') r = (next.buyer - next.buyerShipping) * cd * next.usdRate;
-    else r = (next.income - next.buyerShipping) * next.usdRate;
-    if (!isFinite(r)) return false;
-    if (anchor !== 'cost') next.cost = (r - next.express - next.intl) * md;
-    if (anchor !== 'income') next.income = r / next.usdRate + next.buyerShipping;
-    if (anchor !== 'buyer') next.buyer = r / next.usdRate / cd + next.buyerShipping;
-    next.buyerEur = (next.buyer / next.eurRate) * vat;
-    return true;
-  }
+      // 只留数字与一个小数点，小数位最多两位
+      function cleanText(t) {
+        var s = String(t).replace(/[^\d.]/g, '');
+        var dot = s.indexOf('.');
+        if (dot >= 0) {
+          s = s.slice(0, dot + 1) + s.slice(dot + 1).replace(/\./g, '');
+          s = s.replace(/^(\d+\.\d{0,2}).*$/, '$1');
+        }
+        return s;
+      }
 
-  // 只留数字与一个小数点，小数位最多两位
-  function cleanText(t) {
-    var s = String(t).replace(/[^\d.]/g, '');
-    var dot = s.indexOf('.');
-    if (dot >= 0) {
-      s = s.slice(0, dot + 1) + s.slice(dot + 1).replace(/\./g, '');
-      s = s.replace(/^(\d+\.\d{0,2}).*$/, '$1');
-    }
-    return s;
-  }
+      // 数值代入算式的展示：两位小数后去掉尾零（6.70 → 6.7、155.62 → 155.62）
+      function trimNum(n) {
+        return String(parseFloat(n.toFixed(2)));
+      }
 
-  var values = loadValues();
-  var inputs = []; // { el, key }
+      // 平台结算口径的金额舍入：十进制四舍五入到分（38.335 → 38.34，规避浮点 38.335×100=3833.4999… 被舍成 38.33）
+      function round2(n) {
+        return Math.round(n * 100 + 1e-9) / 100;
+      }
 
-  // 公式代入用的数值文本：去掉多余小数尾零（6.70→6.7、100.00→100）
-  function trimNum(n) { return String(parseFloat(n.toFixed(2))); }
+      // 放大到买家价格时的平台口径：向上取整到分（115÷0.75=153.3333 → 153.34，向上取整保证卖家不被抽佣吃掉）
+      function ceil2(n) {
+        return Math.ceil(n * 100 - 1e-9) / 100;
+      }
 
-  function render() {
-    var invalid =
-      1 - values.margin / 100 <= 0 ||
-      1 - values.commission / 100 <= 0 ||
-      values.usdRate <= 0 ||
-      values.eurRate <= 0;
-    document.getElementById('rows').classList.toggle('hidden', invalid);
-    document.getElementById('invalid').classList.toggle('show', invalid);
-    document.getElementById('eur').textContent = '€' + values.buyerEur.toFixed(2);
-    var formulas = document.getElementById('formulas');
-    formulas.classList.toggle('show', !invalid);
-    if (!invalid) {
-      document.getElementById('fc1').textContent =
-        '(' + trimNum(values.cost) + '÷(1−' + trimNum(values.margin) + '%)+' + trimNum(values.express) + '+' + trimNum(values.intl) + ')÷' + trimNum(values.usdRate) + '+' + trimNum(values.buyerShipping) + ' = ' + values.income.toFixed(2);
-      document.getElementById('fc2').textContent =
-        '(' + values.income.toFixed(2) + '−' + trimNum(values.buyerShipping) + ')÷(1−' + trimNum(values.commission) + '%)+' + trimNum(values.buyerShipping) + ' = ' + values.buyer.toFixed(2);
-      document.getElementById('fc3').textContent =
-        values.buyer.toFixed(2) + '÷' + trimNum(values.eurRate) + '×(1+' + trimNum(values.vat) + '%) = ' + values.buyerEur.toFixed(2);
-    }
-    for (var i = 0; i < inputs.length; i++) {
-      var it = inputs[i];
-      if (document.activeElement === it.el) continue; // 焦点中不回写，避免打断输入
-      it.el.value = values[it.key].toFixed(2);
-    }
-  }
+      var values = loadValues();
+      var inputs = []; // { el, key }
 
-  function commit(key, parsed) {
-    values[key] = parsed;
-    recompute(values, key === 'buyer' || key === 'income' ? key : 'cost');
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(values)); } catch (e) {}
-    render();
-  }
+      // 项目名后的圆圈问号：点击弹出该项目的公式（数值代入算式，随输入实时刷新；再点一次或点别处关闭）
+      function makeHelp(text) {
+        var wrap = document.createElement('span');
+        wrap.className = 'help';
+        wrap.setAttribute('role', 'button');
+        wrap.setAttribute('aria-label', '公式计算规则');
+        var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('viewBox', '0 0 24 24');
+        svg.setAttribute('fill', 'none');
+        svg.setAttribute('stroke', 'currentColor');
+        svg.setAttribute('stroke-width', '2');
+        svg.setAttribute('stroke-linecap', 'round');
+        svg.setAttribute('stroke-linejoin', 'round');
+        svg.innerHTML = '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>';
+        var pop = document.createElement('span');
+        pop.className = 'help-pop';
+        pop.textContent = text;
+        wrap.appendChild(svg);
+        wrap.appendChild(pop);
+        wrap.addEventListener('click', function (e) {
+          e.stopPropagation();
+          var opened = wrap.classList.contains('open');
+          closeHelp();
+          if (!opened) wrap.classList.add('open');
+        });
+        return wrap;
+      }
 
-  function bind(el, key) {
-    inputs.push({ el: el, key: key });
-    var original = ''; // 聚焦时的原始文本
-    el.addEventListener('focus', function () {
-      original = el.value;
-    });
-    el.addEventListener('input', function () {
-      var cleaned = cleanText(el.value);
-      if (cleaned !== el.value) el.value = cleaned;
-      var parsed = parseFloat(cleaned);
-      if (isFinite(parsed)) commit(key, parsed);
-    });
-    el.addEventListener('blur', function () {
-      // 未修改时不触发换算：避免 focus+blur 用舍入后的展示值反推造成其他字段抖动
-      if (el.value === original) return;
-      var v = parseFloat(el.value);
-      if (!isFinite(v)) v = 0;
-      commit(key, v);
-      el.value = v.toFixed(2);
-    });
-  }
+      function closeHelp() {
+        document.querySelectorAll('.help.open').forEach(function (h) { h.classList.remove('open'); });
+      }
+      document.addEventListener('click', closeHelp);
 
-  // 生成字段区：输入框 + 右侧单位装饰段
-  var box = document.getElementById('fields');
-  FIELDS.forEach(function (f) {
-    var row = document.createElement('div');
-    row.className = 'field';
-    if (f.title) row.title = f.title;
-    var label = document.createElement('label');
-    label.textContent = f.label;
-    var group = document.createElement('div');
-    group.className = 'input-group';
-    var input = document.createElement('input');
-    input.inputMode = 'decimal';
-    input.placeholder = '0.00';
-    var unit = document.createElement('span');
-    unit.className = 'unit';
-    unit.textContent = f.unit || '';
-    group.appendChild(input);
-    group.appendChild(unit);
-    row.appendChild(label);
-    row.appendChild(group);
-    box.appendChild(row);
-    bind(input, f.key);
-  });
+      // 问号弹层文本集合：key → .help-pop 元素，render() 时刷新代入算式（加价率 + 结果区三行）
+      var helpPop = {};
 
-  // 结果区的行内输入（反推）
-  document.querySelectorAll('#rows input[data-key]').forEach(function (el) {
-    bind(el, el.getAttribute('data-key'));
-  });
+      function render() {
+        var invalid =
+          1 - values.margin / 100 <= 0 ||
+          1 - values.commission / 100 - values.fee / 100 <= 0 ||
+          values.usdRate <= 0 ||
+          values.eurRate <= 0;
+        document.getElementById('rows').classList.toggle('hidden', invalid);
+        document.getElementById('invalid').classList.toggle('show', invalid);
+        document.getElementById('eur').textContent = '€' + values.buyerEur.toFixed(2);
+        var formulas = document.getElementById('formulas');
+        formulas.classList.toggle('show', !invalid);
+        if (!invalid) {
+          // 结算单各项（DHgate 订单结算样式，平台口径：各金额独立四舍五入到分后再加减）：
+          // 佣金/手续费按显示的订单总额抽；实收金额 = 订单总额 − 佣金 − 手续费（逐项相减，与乘法一次舍入可能差 1 分，以平台为准）
+          var orderTotal = round2(values.buyer);
+          var shippingPaid = ceil2(values.buyerShipping / (1 - values.commission / 100)); // 运费 = 买家运费÷(1−佣金) 向上取整（18÷0.75=24）
+          var commissionAmt = round2(orderTotal * values.commission / 100);
+          var feeAmt = round2(orderTotal * values.fee / 100);
+          var settleIncome = round2(orderTotal - commissionAmt - feeAmt);
+          document.getElementById('bd-product').textContent = '$' + round2(orderTotal - shippingPaid).toFixed(2);
+          document.getElementById('bd-ship').textContent = '$' + shippingPaid.toFixed(2);
+          document.getElementById('bd-total').textContent = '$' + orderTotal.toFixed(2);
+          document.getElementById('bd-comm').textContent = '−$' + commissionAmt.toFixed(2);
+          document.getElementById('bd-paid').textContent = '$' + orderTotal.toFixed(2);
+          document.getElementById('bd-fee').textContent = '−$' + feeAmt.toFixed(2);
+          document.getElementById('bd-actual').textContent = '$' + settleIncome.toFixed(2);
+          // 问号弹层：数值代入算式随输入实时刷新
+          helpPop.income.textContent =
+            '(' + trimNum(values.cost) + '÷(1−' + trimNum(values.margin) + '%)+' + trimNum(values.intl) + ')÷' + trimNum(values.usdRate) +
+            '×(1−' + trimNum(values.commission) + '%)÷(1−' + trimNum(values.commission) + '%−' + trimNum(values.fee) + '%) = ' + values.income.toFixed(2);
+          helpPop.buyer.textContent =
+            '(' + trimNum(values.cost) + '÷(1−' + trimNum(values.margin) + '%)+' + trimNum(values.intl) + ')÷' +
+            trimNum(values.usdRate) + '÷(1−' + trimNum(values.commission) + '%−' + trimNum(values.fee) + '%) = ' + values.buyer.toFixed(2);
+          helpPop.eur.textContent = values.buyer.toFixed(2) + '÷' + trimNum(values.eurRate) + '×(1+' + trimNum(values.vat) + '%) = ' + values.buyerEur.toFixed(2);
+          helpPop.markup.textContent =
+            '(' + values.actualIncome.toFixed(2) + '×' + trimNum(values.usdRate) + '−' + trimNum(values.intl) + '−' + trimNum(values.cost) +
+            ')÷' + trimNum(values.cost) + ' = ' + values.markup.toFixed(2) + '%';
+        }
+        for (var i = 0; i < inputs.length; i++) {
+          var it = inputs[i];
+          if (document.activeElement === it.el) continue; // 焦点中不回写，避免打断输入
+          it.el.value = values[it.key].toFixed(2);
+        }
+      }
 
-  // 报价文案：动态取当前买家价（美元）与含税欧元价、当前欧盟税率
-  function getQuoteText() {
-    return (
-      'The price of this item after discount (shipping included) is $' +
-      values.buyer.toFixed(2) +
-      ' USD.\n' +
-      'Estimated price for EU countries (' +
-      Math.round(values.vat) +
-      '% VAT included): €' +
-      values.buyerEur.toFixed(2) +
-      ' EUR.\n' +
-      'This is an estimated price.'
-    );
-  }
+      function commit(key, parsed) {
+        var snapshot = JSON.parse(JSON.stringify(values)); // 提交前快照：失败时整体还原
+        var ok;
+        if (key === 'markup') {
+          // 加价率与毛利率纯比例互推：margin = k÷(100+k)×100（k 为加价率百分数值）
+          values.markup = parsed;
+          values.margin = 100 + parsed !== 0 ? (parsed / (100 + parsed)) * 100 : 0;
+          ok = recompute(values, 'cost');
+        } else {
+          values[key] = parsed;
+          // 产品定价、买家价才反推（实际收入已改为纯派生值，只在结算单展示）
+          ok = recompute(values, key === 'buyer' || key === 'income' ? key : 'cost');
+        }
+        // 反推失败（数字未输完/无法计算）：还原上一状态、不落盘；成功才持久化
+        if (!ok) values = snapshot;
+        else { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(values)); } catch (e) { } }
+        render();
+      }
 
-  var copyBtn = document.getElementById('copy');
-  copyBtn.addEventListener('click', function () {
-    var text = getQuoteText();
-    copyBtn.title = text; // 悬停可预览全文
-    var done = function () {
-      copyBtn.textContent = '已复制 ✓';
-      copyBtn.classList.add('done');
-      setTimeout(function () {
-        copyBtn.textContent = '复制报价';
-        copyBtn.classList.remove('done');
-      }, 1600);
-    };
-    var fail = function () { copyBtn.textContent = '复制失败，请长按手动复制'; };
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(done, function () { fallbackCopy(text, done, fail); });
-    } else {
-      fallbackCopy(text, done, fail);
-    }
-  });
-  function fallbackCopy(text, done, fail) {
-    var ta = document.createElement('textarea');
-    ta.value = text;
-    ta.style.position = 'fixed';
-    ta.style.opacity = '0';
-    document.body.appendChild(ta);
-    ta.focus();
-    ta.select();
-    var ok = false;
-    try { ok = document.execCommand('copy'); } catch (e) {}
-    document.body.removeChild(ta);
-    if (ok) done(); else fail();
-    setTimeout(function () { copyBtn.textContent = '复制报价'; }, 2400);
-  }
+      function bind(el, key) {
+        inputs.push({ el: el, key: key });
+        var original = ''; // 聚焦时的原始文本
+        el.addEventListener('focus', function () {
+          original = el.value;
+        });
+        el.addEventListener('input', function () {
+          var cleaned = cleanText(el.value);
+          if (cleaned !== el.value) el.value = cleaned;
+          var parsed = parseFloat(cleaned);
+          if (isFinite(parsed)) commit(key, parsed);
+        });
+        el.addEventListener('blur', function () {
+          // 未修改时不触发换算：避免 focus+blur 用舍入后的展示值反推造成其他字段抖动
+          if (el.value === original) return;
+          var v = parseFloat(el.value);
+          if (!isFinite(v)) v = 0;
+          commit(key, v);
+          // 回写状态真实值：提交无效（如收入过低）时自动还原为上一有效值
+          el.value = values[key].toFixed(2);
+        });
+      }
 
-  render();
-})();
-</script>
+      // 生成字段区：输入框 + 右侧单位装饰段；仅加价率在项目名后带问号（弹公式代入）
+      var box = document.getElementById('fields');
+      FIELDS.forEach(function (f) {
+        var row = document.createElement('div');
+        row.className = 'field';
+        var label = document.createElement('label');
+        label.textContent = f.label;
+        if (f.key === 'markup') {
+          var mh = makeHelp('');
+          label.appendChild(mh);
+          helpPop.markup = mh.querySelector('.help-pop');
+        }
+        var group = document.createElement('div');
+        group.className = 'input-group';
+        var input = document.createElement('input');
+        input.inputMode = 'decimal';
+        input.placeholder = '0.00';
+        var unit = document.createElement('span');
+        unit.className = 'unit';
+        unit.textContent = f.unit || '';
+        group.appendChild(input);
+        group.appendChild(unit);
+        row.appendChild(label);
+        row.appendChild(group);
+        box.appendChild(row);
+        bind(input, f.key);
+      });
+
+      // 结果区三行项目名后的问号（产品定价/买家价格$/€，弹公式代入）
+      document.querySelectorAll('#rows .result-row').forEach(function (row) {
+        var keyEl = row.querySelector('input[data-key]');
+        var key = keyEl ? keyEl.getAttribute('data-key') : 'eur';
+        var h = makeHelp('');
+        row.querySelector('.rl').appendChild(h);
+        helpPop[key] = h.querySelector('.help-pop');
+      });
+
+      // 结果区的行内输入（反推）
+      document.querySelectorAll('#rows input[data-key]').forEach(function (el) {
+        bind(el, el.getAttribute('data-key'));
+      });
+
+      var copyBtn = document.getElementById('copy');
+      copyBtn.addEventListener('click', function () {
+        var text = renderQuote();
+        copyBtn.title = text; // 悬停可预览全文
+        var done = function () {
+          copyBtn.textContent = '已复制 ✓';
+          copyBtn.classList.add('done');
+          setTimeout(function () {
+            copyBtn.textContent = '复制报价';
+            copyBtn.classList.remove('done');
+          }, 1600);
+        };
+        var fail = function () { copyBtn.textContent = '复制失败，请长按手动复制'; };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(done, function () { fallbackCopy(text, done, fail); });
+        } else {
+          fallbackCopy(text, done, fail);
+        }
+      });
+      function fallbackCopy(text, done, fail) {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        var ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { }
+        document.body.removeChild(ta);
+        if (ok) done(); else fail();
+        setTimeout(function () { copyBtn.textContent = '复制报价'; }, 2400);
+      }
+
+      render();
+    })();
+  </script>
 </body>
+
 </html>
