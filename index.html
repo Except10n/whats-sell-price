@@ -537,53 +537,64 @@
               try { localStorage.removeItem(SEM_KEY); } catch (e5) { }
             }
           }
-          // 载入即按新口径重算一遍，保证展示状态自洽（加价率等派生值随之刷新）
-          recompute(v, 'cost');
+          // 载入即以定价为锚重算一遍（定价保持存储值，买家价/两率等派生值随之刷新自洽）
+          recompute(v, 'income');
           return v;
         } catch (e) { return JSON.parse(JSON.stringify(DEFAULTS)); }
       }
 
-      // 与桌面版一致（买家价扣费口径，2026-09-28 v4 定稿：交易手续费按买家价格（商品+运费，不含欧盟税）扣除）：
-      //   买家价格($) = 商品价格 + 运费（不含欧盟税）；买家价(€) = 买家价($) ÷ 欧元汇率 ×（1+欧盟税率），税不参与扣费；
-      //   产品定价($) = 买家价格×(1−佣金) 向下取整到分 —— 扣佣金后、未扣手续费（平台展示收入）；
-      //   买家价格($) = 产品定价÷(1−佣金) 向上取整到分 —— 先有定价、买家价由定价直接放大推导（2026-09-29 定稿）；
-      //   实际收入($) = 买家价格×(1−佣金−手续费) —— 最终到手（佣金与手续费都按买家价格抽）。
-      // 毛利率 = 总利润 ÷（实际收入×美元汇率 − 成本物流），买家运费视同货款收入；
-      // 加价率 = 总利润 ÷ 成本货价，与毛利率纯比例互推（加价率 = 毛利率÷(1−毛利率)），
-      // 故正向编辑（成本、物流、佣金、手续费、汇率、税率）只动买家价格、两率纹丝不动；
-      // 成本物流（国内快递+国际运费合并）为纯转嫁项，手续费只放大买家价格，都不影响实际收入、利润与两率。
-      // 反向（编辑产品定价/买家价）：先归一到买家价格，成本货价不动，反推毛利率。逐键提交时数字可能还没输完：
-      // 反推结果非法（收入不够覆盖转嫁导致 margin ≥ 100%）则整次放弃、保持上一状态，等输入继续。
-      // 买家运费不参与定价与利润，仅用于报价文案与结算单拆分（买家实付运费 = 买家运费÷(1−佣金)，向上取整到分）。
+      // 与桌面版一致（v5 运费补贴口径 + 锚点规则，2026-09-29 定稿）：
+      //   买家价格($) = 商品价格 + 实付运费（不含欧盟税）；买家价(€) = 买家价($) ÷ 欧元汇率 ×（1+欧盟税率），税不参与扣费；
+      //   实付运费 = 买家运费(净得) ÷ (1−佣金) 向上取整到分（买家运费为 0 时为 0，买家价格即纯商品价）；
+      //   实际收入($) = 买家价格×(1−佣金−手续费) —— 最终到手（佣金与手续费都按买家价格抽，运费净得补贴计入收入）。
+      // 毛利率 = 总利润 ÷（买家总额扣两率×汇率 − 成本物流）；加价率 = 总利润 ÷ 成本货价。
+      // 锚点：margin = 毛利率/加价率正推（唯一重算产品定价的入口）——实收需求 =（成本÷(1−毛利率)+成本物流)÷汇率，
+      // 买家运费是收入的补贴（实付运费扣两率后的净得计入收入），商品部分只承担「实收需求 − 运费净得补贴」：
+      // 定价 floor 到分 → 商品价格 ceil 到分 → 买家价格 = 商品价格+实付运费；
+      // 其余参数（成本/物流/运费/佣金/手续费/汇率/税率）与产品定价、买家价格的编辑都以定价/买家价为锚
+      // （定价是平台设置值，不随参数波动）：从定价放大出买家总额，扣两率反推毛利率。
+      // 逐键提交时数字可能还没输完：反推结果非法（商品部分 ≤ 0、收入不够覆盖转嫁导致 margin ≥ 100%）则整次放弃、保持上一状态。
       function recompute(next, anchor) {
         var md = 1 - next.margin / 100;
-        var netd = 1 - next.commission / 100 - next.fee / 100; // 买家价扣佣金+手续费后的净得比例
+        var cd = 1 - next.commission / 100;
+        var netd = cd - next.fee / 100; // 买家价扣佣金+手续费后的净得比例
         if (md <= 0 || netd <= 0 || next.usdRate <= 0 || next.eurRate <= 0) return false;
         var vat = 1 + next.vat / 100;
+        var shippingPaid = next.buyerShipping > 0 ? ceil2(next.buyerShipping / cd) : 0; // 买家实付运费
 
-        if (anchor === 'buyer' || anchor === 'income') {
-          // 编辑买家价格/产品定价：先归一到买家价格（定价放大按平台口径向上取整到分），扣佣金+手续费得实际收入，成本货价不动、反推毛利率
-          var buyer = anchor === 'buyer' ? next.buyer : ceil2(next.income / (1 - next.commission / 100));
-          var rev = buyer * netd * next.usdRate - next.intl; // 实际收入扣转嫁 = 成本货价 + 总利润
+        if (anchor === 'buyer' || (anchor === 'income' && next.income > 0)) {
+          // 买家价格/产品定价为锚（编辑定价，或改动成本/物流/运费/佣金/手续费/汇率等参数——定价不随参数波动）：
+          // 从定价放大出商品价格与买家总额，扣两率得实际收入，成本货价不动、反推毛利率。
+          // 定价为 0（空表单从未定价）时无存量可保持，参数输入走下方正推初始化，避免从零填写被反推拦截卡死
+          var goods = anchor === 'buyer' ? next.buyer - shippingPaid : ceil2(next.income / cd);
+          if (goods <= 0) return false;
+          var buyer = anchor === 'buyer' ? next.buyer : goods + shippingPaid;
+          var rev = buyer * netd * next.usdRate - next.intl; // 买家总额扣两率(¥)再扣转嫁 = 成本货价 + 总利润（运费净得补贴收入，与正向同口径）
           var margin = (1 - next.cost / rev) * 100;
           // 先算后写：数字未输完/收入过低（margin ≥ 100% 或非有限）时放弃本次反推，界面保持上一有效状态
           if (!isFinite(rev) || rev === 0 || !isFinite(margin) || margin >= 100) return false;
           next.margin = margin;
           next.buyer = buyer;
-          // 定价锚时保持输入原值（115 → 买家 153.34 是放大后的对应关系，回乘会变 115.005 覆盖输入）；
-          // 买家锚时回乘向下取整到分（153.34×0.75=115.005 → 115.00，与放大方向回环自洽）
-          next.income = anchor === 'income' ? next.income : floor2(buyer * (1 - next.commission / 100));
+          // 定价锚保持输入/存量原值（回乘 floor2(goods×cd) 数学上恒等于原值，直接保留更稳）；
+          // 买家锚时回乘向下取整到分，与放大方向回环自洽
+          next.income = anchor === 'buyer' ? floor2(goods * cd) : next.income;
           next.actualIncome = buyer * netd;
         } else {
-          // 正向：按毛利率定实际收入需求（实收覆盖成本+利润+转嫁），放大成定价（向下取整到分），
-          // 买家价格不再从成本链重算，而是从定价直接推导：定价÷(1−佣金) 向上取整到分
-          next.actualIncome = (next.cost / md + next.intl) / next.usdRate;
-          next.income = floor2((next.actualIncome / netd) * (1 - next.commission / 100));
-          next.buyer = ceil2(next.income / (1 - next.commission / 100));
+          // 毛利率/加价率正推（重算定价的入口；定价为 0 的空表单输参数也走此分支做初始化）：
+          // 按毛利率定实收需求；买家运费是收入补贴（实付运费扣两率后的净得计入收入），
+          // 商品部分只承担「实收需求 − 运费净得补贴」：定价向下取整到分 →
+          // 商品价格向上取整到分 → 买家价格 = 商品价格+实付运费
+          var need = (next.cost / md + next.intl) / next.usdRate; // 实收需求($)
+          var goodsNet = need - shippingPaid * netd; // 商品净得需求 = 实收需求 − 运费净得补贴
+          if (goodsNet < 0) return false; // 负数 = 补贴吃超收入才非法；0 合法（空表单，或收入全靠运费补贴）
+          next.income = floor2((goodsNet / netd) * cd);
+          next.buyer = ceil2(next.income / cd) + shippingPaid;
+          next.actualIncome = next.buyer * netd; // 买家总额扣两率（含运费），与结算单实收同口径
         }
         next.buyerEur = (next.buyer / next.eurRate) * vat;
-        // 联动派生：加价率 = 总利润÷成本货价（按实际收入算；代数上恒等于 毛利率÷(1−毛利率)；货价为 0 时无意义置 0）
-        var profit = next.actualIncome * next.usdRate - next.intl - next.cost;
+        // 联动派生：加价率 = 总利润÷成本货价。总利润从买家总额反推（扣两率、转人民币、减物流与成本），
+        // 运费净得补贴计入收入；与问号公式同链，保证推导展示与界面值一致。货价为 0 时无意义置 0
+        var profit = next.buyer * netd * next.usdRate - next.intl - next.cost;
         next.markup = next.cost !== 0 ? (profit / next.cost) * 100 : 0;
         return true;
       }
@@ -685,16 +696,30 @@
           document.getElementById('bd-paid').textContent = '$' + orderTotal.toFixed(2);
           document.getElementById('bd-fee').textContent = '−$' + feeAmt.toFixed(2);
           document.getElementById('bd-actual').textContent = '$' + settleIncome.toFixed(2);
-          // 问号弹层：数值代入算式随输入实时刷新
-          helpPop.income.textContent =
-            '(' + trimNum(values.cost) + '÷(1−' + trimNum(values.margin) + '%)+' + trimNum(values.intl) + ')÷' + trimNum(values.usdRate) +
-            '×(1−' + trimNum(values.commission) + '%)÷(1−' + trimNum(values.commission) + '%−' + trimNum(values.fee) + '%) = ' + values.income.toFixed(2);
-          helpPop.buyer.textContent =
-            trimNum(values.income) + '÷(1−' + trimNum(values.commission) + '%) = ' + values.buyer.toFixed(2);
-          helpPop.eur.textContent = values.buyer.toFixed(2) + '÷' + trimNum(values.eurRate) + '×(1+' + trimNum(values.vat) + '%) = ' + values.buyerEur.toFixed(2);
-          helpPop.markup.textContent =
-            '(' + values.actualIncome.toFixed(2) + '×' + trimNum(values.usdRate) + '−' + trimNum(values.intl) + '−' + trimNum(values.cost) +
-            ')÷' + trimNum(values.cost) + ' = ' + values.markup.toFixed(2) + '%';
+          // 问号弹层：数值代入算式随输入实时刷新。白名单：参数 + 产品定价/两个买家价格直接代入，其余展开推导；
+          // 汇率在公式中尽量放最后。毛利率/加价率与结算单各行从买家总额链推导，与界面值同链保证一致
+          var productTotal = round2(orderTotal - shippingPaid);
+          var comTerm = '1−' + trimNum(values.commission) + '%';
+          var buyerFormula = values.buyerShipping > 0
+            ? trimNum(values.income) + '÷(' + comTerm + ')+' + trimNum(values.buyerShipping) + '÷(' + comTerm + ') = ' + trimNum(productTotal) + '+' + trimNum(shippingPaid) + ' = ' + values.buyer.toFixed(2)
+            : trimNum(values.income) + '÷(' + comTerm + ') = ' + values.buyer.toFixed(2);
+          var netTerm = values.buyer.toFixed(2) + '×(' + comTerm + '−' + trimNum(values.fee) + '%)×' + trimNum(values.usdRate);
+          var profitTerm = netTerm + '−' + trimNum(values.intl) + '−' + trimNum(values.cost);
+          helpPop.income.textContent = values.buyerShipping > 0
+            ? '((' + trimNum(values.cost) + '÷(1−' + trimNum(values.margin) + '%)+' + trimNum(values.intl) + ')÷' + trimNum(values.usdRate) +
+              '−' + trimNum(values.buyerShipping) + '÷(' + comTerm + ')×(' + comTerm + '−' + trimNum(values.fee) + '%))×(' + comTerm + ')÷(' + comTerm + '−' + trimNum(values.fee) + '%) = ' + values.income.toFixed(2)
+            : '(' + trimNum(values.cost) + '÷(1−' + trimNum(values.margin) + '%)+' + trimNum(values.intl) + ')×(' + comTerm + ')÷(' + comTerm + '−' + trimNum(values.fee) + '%)÷' + trimNum(values.usdRate) + ' = ' + values.income.toFixed(2);
+          helpPop.buyer.textContent = buyerFormula;
+          helpPop.eur.textContent = values.buyer.toFixed(2) + '×(1+' + trimNum(values.vat) + '%)÷' + trimNum(values.eurRate) + ' = ' + values.buyerEur.toFixed(2);
+          helpPop.margin.textContent = '(' + profitTerm + ')÷(' + netTerm + '−' + trimNum(values.intl) + ') = ' + values.margin.toFixed(2) + '%';
+          helpPop.markup.textContent = '(' + profitTerm + ')÷' + trimNum(values.cost) + ' = ' + values.markup.toFixed(2) + '%';
+          helpPop.product.textContent = values.buyer.toFixed(2) + '−' + trimNum(values.buyerShipping) + '÷(' + comTerm + ') = ' + productTotal.toFixed(2);
+          helpPop.ship.textContent = trimNum(values.buyerShipping) + '÷(' + comTerm + ') = ' + shippingPaid.toFixed(2);
+          helpPop.total.textContent = buyerFormula;
+          helpPop.comm.textContent = orderTotal.toFixed(2) + '×' + trimNum(values.commission) + '% = ' + commissionAmt.toFixed(2);
+          helpPop.paid.textContent = productTotal.toFixed(2) + '+' + shippingPaid.toFixed(2) + ' = ' + orderTotal.toFixed(2);
+          helpPop.fee.textContent = orderTotal.toFixed(2) + '×' + trimNum(values.fee) + '% = ' + feeAmt.toFixed(2);
+          helpPop.actual.textContent = orderTotal.toFixed(2) + '−' + commissionAmt.toFixed(2) + '−' + feeAmt.toFixed(2) + ' = ' + settleIncome.toFixed(2);
         }
         for (var i = 0; i < inputs.length; i++) {
           var it = inputs[i];
@@ -710,11 +735,12 @@
           // 加价率与毛利率纯比例互推：margin = k÷(100+k)×100（k 为加价率百分数值）
           values.markup = parsed;
           values.margin = 100 + parsed !== 0 ? (parsed / (100 + parsed)) * 100 : 0;
-          ok = recompute(values, 'cost');
+          ok = recompute(values, 'margin');
         } else {
           values[key] = parsed;
-          // 产品定价、买家价才反推（实际收入已改为纯派生值，只在结算单展示）
-          ok = recompute(values, key === 'buyer' || key === 'income' ? key : 'cost');
+          // 只有改毛利率/加价率才重算产品定价（定价是平台设置值，不随参数波动）；
+          // 其余正向参数以定价为锚：定价不动、买家价随定价放大、毛利率反推；产品定价、买家价编辑同理反推
+          ok = recompute(values, key === 'margin' ? 'margin' : key === 'buyer' ? 'buyer' : 'income');
         }
         // 反推失败（数字未输完/无法计算）：还原上一状态、不落盘；成功才持久化
         if (!ok) values = snapshot;
@@ -745,17 +771,17 @@
         });
       }
 
-      // 生成字段区：输入框 + 右侧单位装饰段；仅加价率在项目名后带问号（弹公式代入）
+      // 生成字段区：输入框 + 右侧单位装饰段；毛利率、加价率在项目名后带问号（弹公式代入）
       var box = document.getElementById('fields');
       FIELDS.forEach(function (f) {
         var row = document.createElement('div');
         row.className = 'field';
         var label = document.createElement('label');
         label.textContent = f.label;
-        if (f.key === 'markup') {
+        if (f.key === 'margin' || f.key === 'markup') {
           var mh = makeHelp('');
           label.appendChild(mh);
-          helpPop.markup = mh.querySelector('.help-pop');
+          helpPop[f.key] = mh.querySelector('.help-pop');
         }
         var group = document.createElement('div');
         group.className = 'input-group';
@@ -780,6 +806,15 @@
         var h = makeHelp('');
         row.querySelector('.rl').appendChild(h);
         helpPop[key] = h.querySelector('.help-pop');
+      });
+
+      // 结算单七行项目名后的问号（弹公式代入，key 按行 id 映射）
+      var BD_KEYS = { 'bd-product': 'product', 'bd-ship': 'ship', 'bd-total': 'total', 'bd-comm': 'comm', 'bd-paid': 'paid', 'bd-fee': 'fee', 'bd-actual': 'actual' };
+      Object.keys(BD_KEYS).forEach(function (id) {
+        var row = document.getElementById(id).closest('.bd');
+        var bh = makeHelp('');
+        row.querySelector('.bl').appendChild(bh);
+        helpPop[BD_KEYS[id]] = bh.querySelector('.help-pop');
       });
 
       // 结果区的行内输入（反推）
