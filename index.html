@@ -440,8 +440,6 @@
         usdRate: 6.7, eurRate: 1.11, vat: 21
       };
       var FIELDS = [
-        { key: 'margin', label: '毛利率', unit: '%' },
-        { key: 'markup', label: '加价率', unit: '%' },
         { key: 'cost', label: '成本货价', unit: '¥' },
         { key: 'intl', label: '成本物流', unit: '¥' },
         { key: 'buyerShipping', label: '买家运费', unit: '$' },
@@ -449,7 +447,9 @@
         { key: 'fee', label: '交易手续费', unit: '%' },
         { key: 'usdRate', label: '美元汇率', unit: '¥' },
         { key: 'eurRate', label: '欧元汇率', unit: '$' },
-        { key: 'vat', label: '欧盟税率', unit: '%' }
+        { key: 'vat', label: '欧盟税率', unit: '%' },
+        { key: 'margin', label: '毛利率', unit: '%' },
+        { key: 'markup', label: '加价率', unit: '%' }
       ];
 
       var LEGACY_USD_RATE = 6.7; // 历史版本的固定美元汇率（迁移旧存储换算用）
@@ -545,7 +545,8 @@
 
       // 与桌面版一致（买家价扣费口径，2026-09-28 v4 定稿：交易手续费按买家价格（商品+运费，不含欧盟税）扣除）：
       //   买家价格($) = 商品价格 + 运费（不含欧盟税）；买家价(€) = 买家价($) ÷ 欧元汇率 ×（1+欧盟税率），税不参与扣费；
-      //   产品定价($) = 买家价格×(1−佣金) —— 扣佣金后、未扣手续费（平台展示收入）；
+      //   产品定价($) = 买家价格×(1−佣金) 向下取整到分 —— 扣佣金后、未扣手续费（平台展示收入）；
+      //   买家价格($) = 产品定价÷(1−佣金) 向上取整到分 —— 先有定价、买家价由定价直接放大推导（2026-09-29 定稿）；
       //   实际收入($) = 买家价格×(1−佣金−手续费) —— 最终到手（佣金与手续费都按买家价格抽）。
       // 毛利率 = 总利润 ÷（实际收入×美元汇率 − 成本物流），买家运费视同货款收入；
       // 加价率 = 总利润 ÷ 成本货价，与毛利率纯比例互推（加价率 = 毛利率÷(1−毛利率)），
@@ -569,14 +570,16 @@
           if (!isFinite(rev) || rev === 0 || !isFinite(margin) || margin >= 100) return false;
           next.margin = margin;
           next.buyer = buyer;
-          // 定价锚时保持输入原值（115 → 买家 153.34 是放大后的对应关系，回乘会变 115.005 覆盖输入）
-          next.income = anchor === 'income' ? next.income : buyer * (1 - next.commission / 100);
+          // 定价锚时保持输入原值（115 → 买家 153.34 是放大后的对应关系，回乘会变 115.005 覆盖输入）；
+          // 买家锚时回乘向下取整到分（153.34×0.75=115.005 → 115.00，与放大方向回环自洽）
+          next.income = anchor === 'income' ? next.income : floor2(buyer * (1 - next.commission / 100));
           next.actualIncome = buyer * netd;
         } else {
-          // 正向：按毛利率定实际收入需求（实收覆盖成本+利润+转嫁），再按净得比例放大成买家价格（向上取整到分）
+          // 正向：按毛利率定实际收入需求（实收覆盖成本+利润+转嫁），放大成定价（向下取整到分），
+          // 买家价格不再从成本链重算，而是从定价直接推导：定价÷(1−佣金) 向上取整到分
           next.actualIncome = (next.cost / md + next.intl) / next.usdRate;
-          next.buyer = ceil2(next.actualIncome / netd);
-          next.income = next.buyer * (1 - next.commission / 100);
+          next.income = floor2((next.actualIncome / netd) * (1 - next.commission / 100));
+          next.buyer = ceil2(next.income / (1 - next.commission / 100));
         }
         next.buyerEur = (next.buyer / next.eurRate) * vat;
         // 联动派生：加价率 = 总利润÷成本货价（按实际收入算；代数上恒等于 毛利率÷(1−毛利率)；货价为 0 时无意义置 0）
@@ -609,6 +612,12 @@
       // 放大到买家价格时的平台口径：向上取整到分（115÷0.75=153.3333 → 153.34，向上取整保证卖家不被抽佣吃掉）
       function ceil2(n) {
         return Math.ceil(n * 100 - 1e-9) / 100;
+      }
+
+      // 定价的分粒度化：向下取整到分（115.005 → 115.00）。定价先于买家价格：先 floor 定价、再 ceil 放大，
+      // 回环核对自洽（115÷0.75 上取整 = 153.34，与买家锚回乘 floor 的 115.00 一致）
+      function floor2(n) {
+        return Math.floor(n * 100 + 1e-9) / 100;
       }
 
       var values = loadValues();
@@ -681,8 +690,7 @@
             '(' + trimNum(values.cost) + '÷(1−' + trimNum(values.margin) + '%)+' + trimNum(values.intl) + ')÷' + trimNum(values.usdRate) +
             '×(1−' + trimNum(values.commission) + '%)÷(1−' + trimNum(values.commission) + '%−' + trimNum(values.fee) + '%) = ' + values.income.toFixed(2);
           helpPop.buyer.textContent =
-            '(' + trimNum(values.cost) + '÷(1−' + trimNum(values.margin) + '%)+' + trimNum(values.intl) + ')÷' +
-            trimNum(values.usdRate) + '÷(1−' + trimNum(values.commission) + '%−' + trimNum(values.fee) + '%) = ' + values.buyer.toFixed(2);
+            trimNum(values.income) + '÷(1−' + trimNum(values.commission) + '%) = ' + values.buyer.toFixed(2);
           helpPop.eur.textContent = values.buyer.toFixed(2) + '÷' + trimNum(values.eurRate) + '×(1+' + trimNum(values.vat) + '%) = ' + values.buyerEur.toFixed(2);
           helpPop.markup.textContent =
             '(' + values.actualIncome.toFixed(2) + '×' + trimNum(values.usdRate) + '−' + trimNum(values.intl) + '−' + trimNum(values.cost) +
