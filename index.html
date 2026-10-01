@@ -247,10 +247,15 @@
       display: none;
     }
 
-    .copy-btn {
-      display: block;
-      width: 100%;
+    /* 复制报价 + 保存方案 并排按钮行（与桌面版一致） */
+    .copy-row {
+      display: flex;
+      gap: 8px;
       margin: 4px 0 2px;
+    }
+
+    .copy-btn {
+      flex: 1;
       padding: 12px;
       border: 0;
       border-radius: 12px;
@@ -267,6 +272,158 @@
 
     .copy-btn.done {
       background: var(--green);
+    }
+
+    .save-btn {
+      flex: 1;
+      padding: 12px;
+      border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+      border-radius: 12px;
+      background: transparent;
+      color: var(--accent);
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .save-btn:active {
+      opacity: 0.8;
+    }
+
+    /* 保存方案的命名行：输入独占一行，保存/取消按钮另起一行 */
+    .plan-name-row {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin: 8px 0 2px;
+    }
+
+    .plan-name-row input {
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: transparent;
+      color: var(--fg);
+      font-size: 14px;
+      outline: none;
+    }
+
+    .plan-name-row input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+    }
+
+    .plan-name-btns {
+      display: flex;
+      gap: 6px;
+    }
+
+    .plan-btn {
+      flex: 1;
+      padding: 8px 0;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: transparent;
+      color: var(--fg);
+      font-size: 13px;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+
+    .plan-btn--ok {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: #fff;
+      font-weight: 600;
+    }
+
+    /* 已存方案列表（结算单下方独立卡片）：双击行载入、× 删除 */
+    .plans-hint {
+      margin: 10px 0 6px;
+      font-size: 11px;
+      text-align: center;
+      color: var(--fg3);
+    }
+
+    .plan-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 4px;
+      padding: 9px 10px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .plan-row:hover {
+      border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+      background: color-mix(in srgb, var(--accent) 6%, transparent);
+    }
+
+    .plan-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--fg);
+    }
+
+    .plan-meta {
+      flex: 1;
+      min-width: 0;
+      text-align: right;
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+      color: var(--fg3);
+      white-space: nowrap;
+    }
+
+    .plan-del {
+      flex-shrink: 0;
+      width: 20px;
+      height: 20px;
+      padding: 0;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--fg3);
+      font-size: 15px;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .plan-del:hover {
+      background: var(--red);
+      color: #fff;
+    }
+
+    /* 轻量 toast（桌面版 MessagePlugin 的网页替代） */
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 28px;
+      z-index: 60;
+      padding: 8px 16px;
+      border-radius: 10px;
+      background: color-mix(in srgb, var(--fg) 88%, transparent);
+      color: var(--card);
+      font-size: 13px;
+      opacity: 0;
+      transform: translate(-50%, 8px);
+      transition: opacity 0.2s ease, transform 0.2s ease;
+      pointer-events: none;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translate(-50%, 0);
+    }
+
+    .hidden {
+      display: none !important;
     }
 
     .formulas {
@@ -395,7 +552,17 @@
       </div>
     </div>
     <p class="invalid" id="invalid">毛利率需小于 100%，佣金+交易手续费合计需小于 100%，汇率需大于 0，无法计算</p>
-    <button class="copy-btn" id="copy" type="button">复制报价</button>
+    <div class="copy-row">
+      <button class="copy-btn" id="copy" type="button">复制报价</button>
+      <button class="save-btn" id="savePlanBtn" type="button">保存方案</button>
+    </div>
+    <div class="plan-name-row hidden" id="planNameRow">
+      <input id="planName" placeholder="方案名称" maxlength="50" autocomplete="off" />
+      <div class="plan-name-btns">
+        <button class="plan-btn plan-btn--ok" id="planOk" type="button">保存</button>
+        <button class="plan-btn" id="planCancel" type="button">取消</button>
+      </div>
+    </div>
     <div class="formulas" id="formulas">
       <div class="bd">
         <span class="bl">产品总计</span>
@@ -427,6 +594,13 @@
       </div>
     </div>
   </div>
+
+  <div class="card hidden" id="plansCard">
+    <p class="plans-hint">方案参数（双击载入）</p>
+    <div id="plansList"></div>
+  </div>
+
+  <div class="toast" id="toast"></div>
 
   <script>
     (function () {
@@ -855,6 +1029,117 @@
         if (ok) done(); else fail();
         setTimeout(function () { copyBtn.textContent = '复制报价'; }, 2400);
       }
+
+      // ==== 保存方案（与桌面版一致：快照存 whats:price-plans，同名覆盖、双击载入、confirm 删除）====
+      var PLANS_KEY = 'whats:price-plans';
+
+      function loadPlans() {
+        try {
+          var raw = JSON.parse(localStorage.getItem(PLANS_KEY) || '[]');
+          if (!Array.isArray(raw)) return [];
+          return raw.filter(function (p) {
+            return !!p && typeof p.name === 'string' && !!p.values && typeof p.values === 'object';
+          });
+        } catch (e) { return []; }
+      }
+      var plans = loadPlans();
+
+      function persistPlans(next) {
+        plans = next;
+        try { localStorage.setItem(PLANS_KEY, JSON.stringify(next)); } catch (e) { toast('方案存储失败'); }
+      }
+
+      var toastEl = document.getElementById('toast');
+      var toastTimer = null;
+      function toast(msg) {
+        toastEl.textContent = msg;
+        toastEl.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(function () { toastEl.classList.remove('show'); }, 1800);
+      }
+
+      var planNameRow = document.getElementById('planNameRow');
+      var planNameInput = document.getElementById('planName');
+
+      function hideNaming() {
+        planNameRow.classList.add('hidden');
+        planNameInput.value = '';
+      }
+
+      function savePlanFromInput() {
+        var name = planNameInput.value.trim();
+        if (!name) { toast('请输入方案名称'); return; }
+        var snapshot = JSON.parse(JSON.stringify(values)); // 完整参数快照（含派生值）
+        persistPlans([{ name: name, savedAt: Date.now(), values: snapshot }].concat(
+          plans.filter(function (p) { return p.name !== name; }) // 同名覆盖，列表内名称唯一
+        ));
+        hideNaming();
+        renderPlans();
+        toast('方案「' + name + '」已保存');
+      }
+
+      function removePlan(name) {
+        if (!window.confirm('删除方案「' + name + '」？')) return;
+        persistPlans(plans.filter(function (p) { return p.name !== name; }));
+        renderPlans();
+      }
+
+      // 双击载入：恢复全部参数，以定价为锚重算一遍（与刷新载入同一入口，派生值随当前口径刷新）
+      function applyPlan(p) {
+        var next = {};
+        for (var k in DEFAULTS) next[k] = DEFAULTS[k];
+        for (var k2 in p.values) {
+          if (typeof p.values[k2] === 'number' && isFinite(p.values[k2])) next[k2] = p.values[k2]; // 逐字段兜底，旧方案缺字段也能载入
+        }
+        if (!recompute(next, 'income')) { toast('方案参数无法计算，未载入'); return; }
+        values = next;
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(values)); } catch (e) { }
+        render();
+        toast('已载入「' + p.name + '」');
+      }
+
+      function renderPlans() {
+        document.getElementById('plansCard').classList.toggle('hidden', plans.length === 0);
+        var list = document.getElementById('plansList');
+        list.innerHTML = '';
+        plans.forEach(function (p) {
+          var row = document.createElement('div');
+          row.className = 'plan-row';
+          row.title = '双击载入参数';
+          row.addEventListener('dblclick', function () { applyPlan(p); });
+          var name = document.createElement('span');
+          name.className = 'plan-name';
+          name.textContent = p.name;
+          name.title = p.name; // 名称截断时悬停显示全名
+          var meta = document.createElement('span');
+          meta.className = 'plan-meta';
+          meta.textContent = p.values.income > 0 ? '$' + p.values.buyer.toFixed(2) : '—';
+          var del = document.createElement('button');
+          del.type = 'button';
+          del.className = 'plan-del';
+          del.setAttribute('aria-label', '删除方案');
+          del.textContent = '×';
+          del.addEventListener('click', function (e) { e.stopPropagation(); removePlan(p.name); });
+          del.addEventListener('dblclick', function (e) { e.stopPropagation(); });
+          row.appendChild(name);
+          row.appendChild(meta);
+          row.appendChild(del);
+          list.appendChild(row);
+        });
+      }
+
+      document.getElementById('savePlanBtn').addEventListener('click', function () {
+        planNameRow.classList.remove('hidden');
+        planNameInput.focus();
+      });
+      document.getElementById('planOk').addEventListener('click', savePlanFromInput);
+      document.getElementById('planCancel').addEventListener('click', hideNaming);
+      planNameInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') savePlanFromInput();
+        else if (e.key === 'Escape') hideNaming();
+      });
+
+      renderPlans();
 
       render();
     })();
