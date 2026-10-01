@@ -1030,16 +1030,30 @@
         setTimeout(function () { copyBtn.textContent = '复制报价'; }, 2400);
       }
 
-      // ==== 保存方案（与桌面版一致：快照存 whats:price-plans，同名覆盖、双击载入、confirm 删除）====
+      // ==== 保存方案（与桌面版一致：快照存 whats:price-plans，编号 id 唯一、名字可重复，双击载入进更新态、confirm 删除）====
       var PLANS_KEY = 'whats:price-plans';
 
+      // 方案编号：时间戳 + 随机串，同一毫秒多次保存也不撞
+      function genPlanId() {
+        return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+      }
+
+      // 读取已存方案（旧存储无 id 的条目补生成）；损坏的条目/整体损坏都安全降级
       function loadPlans() {
         try {
           var raw = JSON.parse(localStorage.getItem(PLANS_KEY) || '[]');
           if (!Array.isArray(raw)) return [];
-          return raw.filter(function (p) {
-            return !!p && typeof p.name === 'string' && !!p.values && typeof p.values === 'object';
+          var list = [];
+          raw.forEach(function (p) {
+            if (!p || typeof p.name !== 'string' || !p.values || typeof p.values !== 'object') return;
+            list.push({
+              id: typeof p.id === 'string' && p.id ? p.id : genPlanId(),
+              name: p.name,
+              savedAt: typeof p.savedAt === 'number' ? p.savedAt : Date.now(),
+              values: p.values
+            });
           });
+          return list;
         } catch (e) { return []; }
       }
       var plans = loadPlans();
@@ -1060,31 +1074,60 @@
 
       var planNameRow = document.getElementById('planNameRow');
       var planNameInput = document.getElementById('planName');
+      var planOkBtn = document.getElementById('planOk');
+      // 载入方案进入的更新会话：双击载入时置为该方案 id，此时保存 = 更新它；取消（或未载入）置 null，保存 = 新增
+      var editId = null;
 
+      // 退出命名行：收起、清空、退出更新会话（之后的保存是新增）、按钮文案复位
       function hideNaming() {
         planNameRow.classList.add('hidden');
         planNameInput.value = '';
+        editId = null;
+        planOkBtn.textContent = '保存';
+      }
+
+      // 进入命名行：预填名字，更新态（有 id）按钮显示「更新」
+      function showNaming(name, id) {
+        editId = id || null;
+        planOkBtn.textContent = editId !== null ? '更新' : '保存';
+        planNameInput.value = name || '';
+        planNameRow.classList.remove('hidden');
+        planNameInput.focus();
       }
 
       function savePlanFromInput() {
         var name = planNameInput.value.trim();
         if (!name) { toast('请输入方案名称'); return; }
         var snapshot = JSON.parse(JSON.stringify(values)); // 完整参数快照（含派生值）
-        persistPlans([{ name: name, savedAt: Date.now(), values: snapshot }].concat(
-          plans.filter(function (p) { return p.name !== name; }) // 同名覆盖，列表内名称唯一
-        ));
+        // 载入后未取消：保存 = 更新原方案（编号不变、可改名，列表位置不动）；方案已被删则退化为新增
+        var target = null;
+        if (editId !== null) {
+          plans.forEach(function (p) { if (p.id === editId) target = p; });
+        }
+        if (target !== null) {
+          persistPlans(plans.map(function (p) {
+            return p.id === target.id ? { id: p.id, name: name, savedAt: Date.now(), values: snapshot } : p;
+          }));
+        } else {
+          persistPlans([{ id: genPlanId(), name: name, savedAt: Date.now(), values: snapshot }].concat(plans));
+        }
         hideNaming();
         renderPlans();
-        toast('方案「' + name + '」已保存');
+        toast(target !== null ? '方案「' + name + '」已更新' : '方案「' + name + '」已保存');
       }
 
-      function removePlan(name) {
-        if (!window.confirm('删除方案「' + name + '」？')) return;
-        persistPlans(plans.filter(function (p) { return p.name !== name; }));
+      function removePlan(plan) {
+        if (!window.confirm('删除方案「' + plan.name + '」？')) return;
+        persistPlans(plans.filter(function (p) { return p.id !== plan.id; }));
+        if (editId === plan.id) { // 删的正是更新会话里的方案：退出会话，之后的保存是新增
+          editId = null;
+          planOkBtn.textContent = '保存';
+        }
         renderPlans();
       }
 
-      // 双击载入：恢复全部参数，以定价为锚重算一遍（与刷新载入同一入口，派生值随当前口径刷新）
+      // 双击载入：恢复全部参数，以定价为锚重算一遍（与刷新载入同一入口，派生值随当前口径刷新）；
+      // 载入后自动展开命名行进入该方案的更新态——再次保存 = 更新，取消 = 退出（之后保存为新增）
       function applyPlan(p) {
         var next = {};
         for (var k in DEFAULTS) next[k] = DEFAULTS[k];
@@ -1095,6 +1138,7 @@
         values = next;
         try { localStorage.setItem(STORAGE_KEY, JSON.stringify(values)); } catch (e) { }
         render();
+        showNaming(p.name, p.id);
         toast('已载入「' + p.name + '」');
       }
 
@@ -1119,7 +1163,7 @@
           del.className = 'plan-del';
           del.setAttribute('aria-label', '删除方案');
           del.textContent = '×';
-          del.addEventListener('click', function (e) { e.stopPropagation(); removePlan(p.name); });
+          del.addEventListener('click', function (e) { e.stopPropagation(); removePlan(p); });
           del.addEventListener('dblclick', function (e) { e.stopPropagation(); });
           row.appendChild(name);
           row.appendChild(meta);
@@ -1129,8 +1173,7 @@
       }
 
       document.getElementById('savePlanBtn').addEventListener('click', function () {
-        planNameRow.classList.remove('hidden');
-        planNameInput.focus();
+        showNaming('', null); // 手动保存 = 新增（载入后的更新会话已被取消/保存收起，这里必为新增态）
       });
       document.getElementById('planOk').addEventListener('click', savePlanFromInput);
       document.getElementById('planCancel').addEventListener('click', hideNaming);
