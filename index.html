@@ -168,6 +168,32 @@
       border-left: 1px solid var(--border);
     }
 
+    /* 只读展示行（无 label / 无输入框样式）：右对齐一行「标题 + 金额」，用于加价额等派生量 */
+    .readonly-line {
+      display: flex;
+      align-items: baseline;
+      justify-content: flex-end;
+      gap: 4px;
+      padding: 6px 0;
+    }
+
+    .readonly-line .title {
+      font-size: 12px;
+      color: var(--fg2);
+    }
+
+    .readonly-line .amount {
+      font-size: 14px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      color: var(--fg);
+    }
+
+    .readonly-line .cur {
+      color: var(--fg2);
+      margin-right: 1px;
+    }
+
     /* 结果区金额：$ 前置紧贴数字 */
     .amount {
       flex: 1;
@@ -900,6 +926,11 @@
           if (document.activeElement === it.el) continue; // 焦点中不回写，避免打断输入
           it.el.value = values[it.key].toFixed(2);
         }
+        // 加价额（派生 = 净利润 ¥）只读展示：与 markup 口径一致 = 成本货价 × 加价率 / 100
+        var markupAmount = document.getElementById('markupAmount');
+        if (markupAmount) {
+          markupAmount.textContent = '¥' + round2((values.cost * values.markup) / 100).toFixed(2);
+        }
       }
 
       function commit(key, parsed) {
@@ -947,6 +978,7 @@
 
       // 生成字段区：输入框 + 右侧单位装饰段；毛利率、加价率在项目名后带问号（弹公式代入）
       var box = document.getElementById('fields');
+      var lastFieldRow = null; // 记录最后一个字段行，「加价额」只读行紧随其后插入
       FIELDS.forEach(function (f) {
         var row = document.createElement('div');
         row.className = 'field';
@@ -970,8 +1002,25 @@
         row.appendChild(label);
         row.appendChild(group);
         box.appendChild(row);
+        lastFieldRow = row;
         bind(input, f.key);
       });
+
+      // 「加价额」只读展示：加价率下方，无 label / 无输入框样式，简洁右对齐一行
+      if (lastFieldRow) {
+        var readonlyRow = document.createElement('div');
+        readonlyRow.className = 'readonly-line';
+        var roTitle = document.createElement('span');
+        roTitle.className = 'title';
+        roTitle.textContent = '加价额';
+        var roAmount = document.createElement('span');
+        roAmount.className = 'amount';
+        roAmount.id = 'markupAmount';
+        roAmount.textContent = '¥0.00';
+        readonlyRow.appendChild(roTitle);
+        readonlyRow.appendChild(roAmount);
+        lastFieldRow.parentNode.insertBefore(readonlyRow, lastFieldRow.nextSibling);
+      }
 
       // 结果区三行项目名后的问号（产品定价/买家价格$/€，弹公式代入）
       document.querySelectorAll('#rows .result-row').forEach(function (row) {
