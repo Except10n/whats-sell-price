@@ -11,7 +11,7 @@
   <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#111317" />
   <link rel="apple-touch-icon"
     href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' rx='40' fill='%230052d9'/%3E%3Ctext x='90' y='118' font-size='84' text-anchor='middle' fill='%23fff' font-family='system-ui'%3E%F0%9F%92%B0%3C/text%3E%3C/svg%3E" />
-  <title>价格计算器</title>
+  <title>价格计算器 1.2.63</title>
   <style>
     *,
     *::before,
@@ -77,6 +77,12 @@
     header small {
       color: var(--fg3);
       font-size: 12px;
+    }
+
+    /* 版本号：靠右显示，便于确认打开的是哪一份副本（打包版携带的副本需重新打包才会更新） */
+    header small#appVersion {
+      margin-left: auto;
+      font-variant-numeric: tabular-nums;
     }
 
     .card {
@@ -556,6 +562,7 @@
   <header>
     <h1>价格计算器</h1>
     <small>成本 → 收入 → 买家价</small>
+    <small id="appVersion">v1.2.5</small>
   </header>
 
   <div class="card" id="fields"></div>
@@ -754,7 +761,10 @@
       // 其余参数（成本/物流/运费/佣金/手续费/汇率/税率）与产品定价、买家价格的编辑都以定价/买家价为锚
       // （定价是平台设置值，不随参数波动）：从定价放大出买家总额，扣两率反推毛利率。
       // 逐键提交时数字可能还没输完：反推结果非法（商品部分 ≤ 0、收入不够覆盖转嫁导致 margin ≥ 100%）则整次放弃、保持上一状态。
-      function recompute(next, anchor) {
+      // 例外（2026-10-26）：参数编辑（成本/物流/运费/佣金/手续费/汇率/税率）把成本抬到当前定价覆盖不了时，
+      // 不整次回退，改走下方毛利率正推、按当前毛利率重算定价与买家价——否则输入 900 这类数值时，
+      // 第三位触发校验、页面静默退回上一次有效值 90，看起来像「不支持三位数」。
+      function recompute(next, anchor, fallbackToMargin) {
         var md = 1 - next.margin / 100;
         var cd = 1 - next.commission / 100;
         var netd = cd - next.fee / 100; // 买家价扣佣金+手续费后的净得比例
@@ -762,25 +772,33 @@
         var vat = 1 + next.vat / 100;
         var shippingPaid = next.buyerShipping > 0 ? ceil2(next.buyerShipping / cd) : 0; // 买家实付运费
 
-        if (anchor === 'buyer' || (anchor === 'income' && next.income > 0)) {
+        var anchored = anchor === 'buyer' || (anchor === 'income' && next.income > 0);
+        var reversed = false;
+        if (anchored) {
           // 买家价格/产品定价为锚（编辑定价，或改动成本/物流/运费/佣金/手续费/汇率等参数——定价不随参数波动）：
           // 从定价放大出商品价格与买家总额，扣两率得实际收入，成本货价不动、反推毛利率。
           // 定价为 0（空表单从未定价）时无存量可保持，参数输入走下方正推初始化，避免从零填写被反推拦截卡死
           var goods = anchor === 'buyer' ? next.buyer - shippingPaid : ceil2(next.income / cd);
-          if (goods <= 0) return false;
-          var buyer = anchor === 'buyer' ? next.buyer : goods + shippingPaid;
+          var buyer = goods > 0 ? (anchor === 'buyer' ? next.buyer : goods + shippingPaid) : 0;
           var rev = buyer * netd * next.usdRate - next.intl; // 买家总额扣两率(¥)再扣转嫁 = 成本货价 + 总利润（运费净得补贴收入，与正向同口径）
           var margin = (1 - next.cost / rev) * 100;
-          // 先算后写：数字未输完/收入过低（margin ≥ 100% 或非有限）时放弃本次反推，界面保持上一有效状态
-          if (!isFinite(rev) || rev === 0 || !isFinite(margin) || margin >= 100) return false;
-          next.margin = margin;
-          next.buyer = buyer;
-          // 定价锚保持输入/存量原值（回乘 floor2(goods×cd) 数学上恒等于原值，直接保留更稳）；
-          // 买家锚时回乘向下取整到分，与放大方向回环自洽
-          next.income = anchor === 'buyer' ? floor2(goods * cd) : next.income;
-          next.actualIncome = buyer * netd;
-        } else {
-          // 毛利率/加价率正推（重算定价的入口；定价为 0 的空表单输参数也走此分支做初始化）：
+          // 先算后写：数字未输完/收入过低（margin ≥ 100% 或非有限）时放弃本次反推，界面保持上一有效状态；
+          // 参数编辑不放弃（fallbackToMargin），落到下方正推兜底
+          if (goods > 0 && isFinite(rev) && rev !== 0 && isFinite(margin) && margin < 100) {
+            next.margin = margin;
+            next.buyer = buyer;
+            // 定价锚保持输入/存量原值（回乘 floor2(goods×cd) 数学上恒等于原值，直接保留更稳）；
+            // 买家锚时回乘向下取整到分，与放大方向回环自洽
+            next.income = anchor === 'buyer' ? floor2(goods * cd) : next.income;
+            next.actualIncome = buyer * netd;
+            reversed = true;
+          } else if (!fallbackToMargin) {
+            return false;
+          }
+        }
+        if (!reversed) {
+          // 毛利率/加价率正推（重算定价的入口；定价为 0 的空表单输参数也走此分支做初始化；
+          // 参数编辑使定价锚失效时也走这里，保持当前毛利率、按新参数重算定价）
           // 按毛利率定实收需求；买家运费是收入补贴（实付运费扣两率后的净得计入收入），
           // 商品部分只承担「实收需求 − 运费净得补贴」：定价向下取整到分 →
           // 商品价格向上取整到分 → 买家价格 = 商品价格+实付运费
@@ -945,12 +963,15 @@
           values[key] = parsed;
           // 只有改毛利率/加价率才重算产品定价（定价是平台设置值，不随参数波动）；
           // 其余正向参数以定价为锚：定价不动、买家价随定价放大、毛利率反推；产品定价、买家价编辑同理反推
-          ok = recompute(values, key === 'margin' ? 'margin' : key === 'buyer' ? 'buyer' : 'income');
+          // 参数编辑（定价/买家价以外）允许正推兜底：成本超过定价覆盖范围时按当前毛利率重算定价，输入不被静默回退
+          var parameterEdit = key !== 'margin' && key !== 'income' && key !== 'buyer';
+          ok = recompute(values, key === 'margin' ? 'margin' : key === 'buyer' ? 'buyer' : 'income', parameterEdit);
         }
         // 反推失败（数字未输完/无法计算）：还原上一状态、不落盘；成功才持久化
         if (!ok) values = snapshot;
         else { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(values)); } catch (e) { } }
         render();
+        return ok;
       }
 
       function bind(el, key) {
@@ -970,8 +991,8 @@
           if (el.value === original) return;
           var v = parseFloat(el.value);
           if (!isFinite(v)) v = 0;
-          commit(key, v);
-          // 回写状态真实值：提交无效（如收入过低）时自动还原为上一有效值
+          // 回写状态真实值；提交无效（如价格低于成本）时还原为上一有效值，并说明原因，避免数值「自己变了」
+          if (!commit(key, v)) toast('该数值超出可计算范围，已恢复上一次有效值');
           el.value = values[key].toFixed(2);
         });
       }
